@@ -72,7 +72,7 @@ const AppShell = ({ children }: AppShellProps) => {
             variant="h6"
             sx={{ flexGrow: 1, fontWeight: 600, textDecoration: 'none', color: 'inherit' }}
           >
-            StockControl
+            Stockearly
           </Typography>
           {isMobile ? (
             <>
