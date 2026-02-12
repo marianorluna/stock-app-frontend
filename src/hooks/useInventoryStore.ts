@@ -22,6 +22,7 @@ type InventoryState = {
   ingredients: Ingredient[];
   dishes: Dish[];
   loading: boolean;
+  loadingMessage?: string;
   logsLoading: boolean;
   error?: string;
   manualFilters: ManualLogFilters;
@@ -44,12 +45,15 @@ type InventoryState = {
   deleteWastagePreset: (presetId: string) => Promise<void>;
 };
 
+let snapshotLongLoadTimer: number | undefined;
+
 export const useInventoryStore = create<InventoryState>()(
   devtools((set, get) => ({
     snapshot: undefined,
     ingredients: [],
     dishes: [],
     loading: false,
+    loadingMessage: undefined,
     logsLoading: false,
     error: undefined,
     manualFilters: {},
@@ -57,15 +61,56 @@ export const useInventoryStore = create<InventoryState>()(
     purchasesLog: [],
     wastageLog: [],
     wastagePresets: [],
+    //obtiene el snapshot actual del inventario desde el endpoint de inventario
     fetchSnapshot: async () => {
-      set({ loading: true, error: undefined });
+      if (snapshotLongLoadTimer) {
+        clearTimeout(snapshotLongLoadTimer);
+      }
+
+      set({
+        loading: true,
+        loadingMessage: 'Cargando datos iniciales...',
+        error: undefined
+      });
+
+      snapshotLongLoadTimer = window.setTimeout(() => {
+        set((state) =>
+          state.loading
+            ? {
+                loadingMessage:
+                  'El servidor está iniciando, esto puede tardar un poco más de lo normal...'
+              }
+            : state
+        );
+      }, 10000);
+
       try {
-        const { data } = await apiClient.get<StockSnapshot>('/dashboard/snapshot');
-        set({ snapshot: data, loading: false });
+        //usar el endpoint de inventory (accesible para usuarios con inventory:read)
+        const { data } = await apiClient.get<StockSnapshot>('/inventory/snapshot');
+        if (snapshotLongLoadTimer) {
+          clearTimeout(snapshotLongLoadTimer);
+          snapshotLongLoadTimer = undefined;
+        }
+
+        set({
+          snapshot: data,
+          loading: false,
+          loadingMessage: undefined
+        });
       } catch (error) {
-        set({ error: 'Error cargando dashboard', loading: false });
+        if (snapshotLongLoadTimer) {
+          clearTimeout(snapshotLongLoadTimer);
+          snapshotLongLoadTimer = undefined;
+        }
+
+        set({
+          error: 'Error cargando inventario',
+          loading: false,
+          loadingMessage: undefined
+        });
       }
     },
+    //obtiene la lista de ingredientes desde la api
     fetchIngredients: async () => {
       try {
         const { data } = await apiClient.get<Ingredient[]>('/ingredients');
@@ -74,6 +119,7 @@ export const useInventoryStore = create<InventoryState>()(
         set({ error: 'Error cargando ingredientes' });
       }
     },
+    //obtiene la lista de platos/recetas desde la api
     fetchDishes: async () => {
       try {
         const { data } = await apiClient.get<Dish[]>('/dishes');
@@ -82,22 +128,27 @@ export const useInventoryStore = create<InventoryState>()(
         set({ error: 'Error cargando recetas' });
       }
     },
+    //registra una venta manual y actualiza el inventario
     createSale: async (payload) => {
       await apiClient.post('/manual/sales', payload);
       await Promise.all([get().fetchSnapshot(), get().fetchManualLogs()]);
     },
+    //registra una compra manual y actualiza el inventario
     createPurchase: async (payload) => {
       await apiClient.post('/manual/purchases', payload);
       await Promise.all([get().fetchSnapshot(), get().fetchManualLogs()]);
     },
+    //registra una merma manual y actualiza el inventario
     createWastage: async (payload) => {
       await apiClient.post('/manual/wastage', payload);
       await Promise.all([get().fetchSnapshot(), get().fetchManualLogs()]);
     },
+    //elimina un registro de merma y revierte el cambio en el inventario
     deleteWastage: async (id) => {
       await apiClient.delete(`/manual/wastage/${id}`);
       await Promise.all([get().fetchSnapshot(), get().fetchManualLogs()]);
     },
+    //registra listeners de websocket para actualizar el inventario en tiempo real
     registerSocketListeners: (socket) => {
       const handleSale = () => {
         void get().fetchSnapshot();
@@ -122,6 +173,7 @@ export const useInventoryStore = create<InventoryState>()(
         socket.off('inventory:wastage', handleWastage);
       };
     },
+    //obtiene los registros manuales de ventas, compras y mermas con filtros opcionales
     fetchManualLogs: async (filters) => {
       const currentFilters = filters ?? get().manualFilters ?? {};
       if (filters) {

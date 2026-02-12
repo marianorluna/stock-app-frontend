@@ -18,6 +18,8 @@ import {
 import { useForm, useFieldArray, Controller } from 'react-hook-form';
 import { useInventoryStore } from '../hooks/useInventoryStore';
 import apiClient from '../services/apiClient';
+import { useAuth } from '../contexts/AuthContext';
+import { RequirePermission } from '../components/auth/RequirePermission';
 import SearchIcon from '@mui/icons-material/Search';
 import type { Dish } from '../types';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
@@ -177,9 +179,11 @@ const RecipesPage = () => {
       <Grid item xs={12}>
         <Stack direction="row" justifyContent="space-between" alignItems="center">
           <Typography variant="h4">Recetas</Typography>
-          <Button variant="contained" onClick={handleOpen}>
-            Nueva receta
-          </Button>
+          <RequirePermission resource="recipes" action="create" hide>
+            <Button variant="contained" onClick={handleOpen}>
+              Nueva receta
+            </Button>
+          </RequirePermission>
         </Stack>
       </Grid>
 
@@ -231,28 +235,34 @@ const RecipesPage = () => {
                 })}
               </Stack>
               <Stack direction="row" spacing={1.5} sx={{ mt: 2 }}>
-                <Button
-                  size="small"
-                  startIcon={<EditOutlinedIcon fontSize="small" />}
-                  onClick={() => handleEdit(dish)}
-                >
-                  Editar
-                </Button>
-                <Button
-                  size="small"
-                  startIcon={<ContentCopyIcon fontSize="small" />}
-                  onClick={() => handleDuplicate(dish)}
-                >
-                  Duplicar
-                </Button>
-                <Button
-                  size="small"
-                  color="error"
-                  startIcon={<DeleteOutlineIcon fontSize="small" />}
-                  onClick={() => handleDelete(dish)}
-                >
-                  Eliminar
-                </Button>
+                <RequirePermission resource="recipes" action="update" hide>
+                  <Button
+                    size="small"
+                    startIcon={<EditOutlinedIcon fontSize="small" />}
+                    onClick={() => handleEdit(dish)}
+                  >
+                    Editar
+                  </Button>
+                </RequirePermission>
+                <RequirePermission resource="recipes" action="create" hide>
+                  <Button
+                    size="small"
+                    startIcon={<ContentCopyIcon fontSize="small" />}
+                    onClick={() => handleDuplicate(dish)}
+                  >
+                    Duplicar
+                  </Button>
+                </RequirePermission>
+                <RequirePermission resource="recipes" action="delete" hide>
+                  <Button
+                    size="small"
+                    color="error"
+                    startIcon={<DeleteOutlineIcon fontSize="small" />}
+                    onClick={() => handleDelete(dish)}
+                  >
+                    Eliminar
+                  </Button>
+                </RequirePermission>
               </Stack>
             </CardContent>
           </Card>

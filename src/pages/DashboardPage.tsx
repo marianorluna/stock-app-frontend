@@ -1,28 +1,20 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import {
   Alert,
   Box,
-  Button,
   Card,
   CardContent,
   Chip,
   Divider,
-  FormControl,
   Grid,
-  InputLabel,
   LinearProgress,
-  MenuItem,
-  Select,
   Skeleton,
   Stack,
-  Tab,
-  Tabs,
-  Tooltip,
-  Typography,
-  useMediaQuery
+  Typography
 } from '@mui/material';
-import { useTheme } from '@mui/material/styles';
+import { Link } from 'react-router-dom';
 import { useInventoryStore } from '../hooks/useInventoryStore';
+import { useTheme } from '@mui/material/styles';
 import BarChartIcon from '@mui/icons-material/BarChart';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import LocalDiningIcon from '@mui/icons-material/LocalDining';
@@ -31,8 +23,6 @@ import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 
 const DashboardPage = () => {
   const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'inventory'>('dashboard');
   const { snapshot, loading, error } = useInventoryStore((state) => ({
     snapshot: state.snapshot,
     loading: state.loading,
@@ -60,15 +50,6 @@ const DashboardPage = () => {
     };
   }, [snapshot]);
 
-  const inventoryList = useMemo(() => {
-    if (!snapshot) return [];
-    return [...snapshot.inventory].sort((a, b) => {
-      const aLow = a.stock <= a.reorderPoint ? 1 : 0;
-      const bLow = b.stock <= b.reorderPoint ? 1 : 0;
-      if (aLow !== bLow) return bLow - aLow;
-      return a.name.localeCompare(b.name);
-    });
-  }, [snapshot]);
 
   const categoryBreakdown = useMemo(() => {
     if (!snapshot) {
@@ -101,17 +82,18 @@ const DashboardPage = () => {
   }, [snapshot, theme.palette.info.light, theme.palette.primary.main, theme.palette.warning.light]);
 
   const stockHealth = useMemo(() => {
-    if (!inventoryList.length) {
+    if (!snapshot || !snapshot.inventory || snapshot.inventory.length === 0) {
       return {
         healthy: 0,
         warning: 0,
         critical: 0,
         ratios: { healthy: 0, warning: 0, critical: 0 },
-        highlights: [] as (typeof inventoryList)
+        highlights: [] as Array<{ id: string; name: string; stock: number; reorderPoint: number; unit: string }>
       };
     }
 
-    const counters = inventoryList.reduce(
+    const inventory = snapshot.inventory;
+    const counters = inventory.reduce(
       (acc, item) => {
         if (item.stock <= 0) {
           acc.critical += 1;
@@ -125,17 +107,17 @@ const DashboardPage = () => {
       { healthy: 0, warning: 0, critical: 0 }
     );
 
-    const total = inventoryList.length;
+    const total = inventory.length;
     const ratios = {
       healthy: Math.round((counters.healthy / total) * 100),
       warning: Math.round((counters.warning / total) * 100),
       critical: Math.round((counters.critical / total) * 100)
     };
 
-    const highlights = inventoryList.filter((item) => item.stock <= item.reorderPoint).slice(0, 5);
+    const highlights = inventory.filter((item) => item.stock <= item.reorderPoint).slice(0, 5);
 
     return { ...counters, ratios, highlights };
-  }, [inventoryList]);
+  }, [snapshot]);
 
   const lowStockItems = useMemo(() => snapshot?.lowStock?.slice(0, 5) ?? [], [snapshot]);
 
@@ -145,34 +127,14 @@ const DashboardPage = () => {
 
   return (
     <Box>
-      {isMobile ? (
-        <FormControl fullWidth sx={{ mb: 3 }}>
-          <InputLabel id="dashboard-tab-selector">Sección</InputLabel>
-          <Select
-            labelId="dashboard-tab-selector"
-            label="Sección"
-            value={activeTab}
-            onChange={(event) => setActiveTab(event.target.value as typeof activeTab)}
-          >
-            <MenuItem value="dashboard">Dashboard</MenuItem>
-            <MenuItem value="inventory">Inventario</MenuItem>
-          </Select>
-        </FormControl>
-      ) : (
-        <Tabs
-          value={activeTab}
-          onChange={(_, value) => setActiveTab(value)}
-          textColor="primary"
-          indicatorColor="primary"
-          sx={{ mb: 3 }}
-        >
-          <Tab label="Dashboard" value="dashboard" />
-          <Tab label="Inventario" value="inventory" />
-        </Tabs>
-      )}
+      <Typography variant="h4" gutterBottom>
+        Dashboard
+      </Typography>
+      <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+        Resumen y estadísticas del inventario
+      </Typography>
 
-      {activeTab === 'dashboard' ? (
-        <Grid container spacing={3}>
+      <Grid container spacing={3}>
           {error && (
             <Grid item xs={12}>
               <Alert severity="error">{error}</Alert>
@@ -181,52 +143,136 @@ const DashboardPage = () => {
           <Grid item xs={12}>
             <Grid container spacing={2}>
               <Grid item xs={6}>
-                <Card component={Button} onClick={() => setActiveTab('inventory')} sx={{ textAlign: 'left', width: '100%' }}>
-                  <CardContent>
-                    <Typography variant="subtitle2" color="text.secondary">
-                      Ingredientes
-                    </Typography>
-                    <Typography variant="h4">{totals.ingredients.total}</Typography>
-                  </CardContent>
-                </Card>
+                <Box
+                  component={Link}
+                  to="/ingredients"
+                  sx={{ 
+                    textDecoration: 'none',
+                    display: 'block'
+                  }}
+                >
+                  <Card
+                    variant="outlined"
+                    sx={{ 
+                      textAlign: 'left', 
+                      width: '100%',
+                      cursor: 'pointer',
+                      transition: 'transform 0.2s, box-shadow 0.2s',
+                      '&:hover': {
+                        transform: 'translateY(-2px)',
+                        boxShadow: 3
+                      }
+                    }}
+                  >
+                    <CardContent>
+                      <Typography variant="subtitle2" color="text.secondary">
+                        Ingredientes
+                      </Typography>
+                      <Typography variant="h4">{totals.ingredients.total}</Typography>
+                    </CardContent>
+                  </Card>
+                </Box>
               </Grid>
               <Grid item xs={6}>
-                <Card component={Button} onClick={() => setActiveTab('inventory')} sx={{ textAlign: 'left', width: '100%' }}>
-                  <CardContent>
-                    <Typography variant="subtitle2" color="text.secondary">
-                      Faltantes
-                    </Typography>
-                    <Typography variant="h4" color={totals.ingredients.lowStock > 0 ? 'error' : 'primary'}>
-                      {totals.ingredients.lowStock}
-                    </Typography>
-                  </CardContent>
-                </Card>
+                <Box
+                  component={Link}
+                  to="/ingredients"
+                  sx={{ 
+                    textDecoration: 'none',
+                    display: 'block'
+                  }}
+                >
+                  <Card
+                    variant="outlined"
+                    sx={{ 
+                      textAlign: 'left', 
+                      width: '100%',
+                      cursor: 'pointer',
+                      transition: 'transform 0.2s, box-shadow 0.2s',
+                      '&:hover': {
+                        transform: 'translateY(-2px)',
+                        boxShadow: 3
+                      }
+                    }}
+                  >
+                    <CardContent>
+                      <Typography variant="subtitle2" color="text.secondary">
+                        Faltantes
+                      </Typography>
+                      <Typography variant="h4" color={totals.ingredients.lowStock > 0 ? 'error' : 'primary'}>
+                        {totals.ingredients.lowStock}
+                      </Typography>
+                    </CardContent>
+                  </Card>
+                </Box>
               </Grid>
             </Grid>
           </Grid>
           <Grid item xs={12}>
             <Grid container spacing={2}>
               <Grid item xs={6}>
-                <Card component={Button} onClick={() => setActiveTab('inventory')} sx={{ textAlign: 'left', width: '100%' }}>
-                  <CardContent>
-                    <Typography variant="subtitle2" color="text.secondary">
-                      Bebidas & Café
-                    </Typography>
-                    <Typography variant="h4">{totals.beverages.total}</Typography>
-                  </CardContent>
-                </Card>
+                <Box
+                  component={Link}
+                  to="/drinks"
+                  sx={{ 
+                    textDecoration: 'none',
+                    display: 'block'
+                  }}
+                >
+                  <Card
+                    variant="outlined"
+                    sx={{ 
+                      textAlign: 'left', 
+                      width: '100%',
+                      cursor: 'pointer',
+                      transition: 'transform 0.2s, box-shadow 0.2s',
+                      '&:hover': {
+                        transform: 'translateY(-2px)',
+                        boxShadow: 3
+                      }
+                    }}
+                  >
+                    <CardContent>
+                      <Typography variant="subtitle2" color="text.secondary">
+                        Bebidas & Café
+                      </Typography>
+                      <Typography variant="h4">{totals.beverages.total}</Typography>
+                    </CardContent>
+                  </Card>
+                </Box>
               </Grid>
               <Grid item xs={6}>
-                <Card component={Button} onClick={() => setActiveTab('inventory')} sx={{ textAlign: 'left', width: '100%' }}>
-                  <CardContent>
-                    <Typography variant="subtitle2" color="text.secondary">
-                      Faltantes
-                    </Typography>
-                    <Typography variant="h4" color={totals.beverages.lowStock > 0 ? 'error' : 'primary'}>
-                      {totals.beverages.lowStock}
-                    </Typography>
-                  </CardContent>
-                </Card>
+                <Box
+                  component={Link}
+                  to="/drinks"
+                  sx={{ 
+                    textDecoration: 'none',
+                    display: 'block'
+                  }}
+                >
+                  <Card
+                    variant="outlined"
+                    sx={{ 
+                      textAlign: 'left', 
+                      width: '100%',
+                      cursor: 'pointer',
+                      transition: 'transform 0.2s, box-shadow 0.2s',
+                      '&:hover': {
+                        transform: 'translateY(-2px)',
+                        boxShadow: 3
+                      }
+                    }}
+                  >
+                    <CardContent>
+                      <Typography variant="subtitle2" color="text.secondary">
+                        Faltantes
+                      </Typography>
+                      <Typography variant="h4" color={totals.beverages.lowStock > 0 ? 'error' : 'primary'}>
+                        {totals.beverages.lowStock}
+                      </Typography>
+                    </CardContent>
+                  </Card>
+                </Box>
               </Grid>
             </Grid>
           </Grid>
@@ -475,45 +521,6 @@ const DashboardPage = () => {
           </Grid>
 
         </Grid>
-      ) : (
-        <Card>
-          <CardContent>
-            <Typography variant="h6" sx={{ mb: 2 }}>
-              Inventario actual
-            </Typography>
-            {!snapshot ? (
-              <Typography>Sin datos disponibles aún.</Typography>
-            ) : (
-              <Grid container spacing={2}>
-                {inventoryList.map((item) => (
-                  <Grid key={item.id} item xs={12} md={6}>
-                    <Card
-                      variant="outlined"
-                      sx={{ borderColor: item.stock <= item.reorderPoint ? 'error.main' : 'divider' }}
-                    >
-                      <CardContent>
-                        <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase' }}>
-                          {item.category === 'ingredient'
-                            ? 'Ingrediente'
-                            : item.category === 'coffee'
-                              ? 'Café'
-                              : 'Bebida'}
-                        </Typography>
-                        <Typography variant="subtitle1" fontWeight={600}>
-                          {item.name}
-                        </Typography>
-                        <Typography variant="body2" color="text.secondary">
-                          Stock: {item.stock} {item.unit}
-                        </Typography>
-                      </CardContent>
-                    </Card>
-                  </Grid>
-                ))}
-              </Grid>
-            )}
-          </CardContent>
-        </Card>
-      )}
     </Box>
   );
 };

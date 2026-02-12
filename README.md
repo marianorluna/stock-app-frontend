@@ -1,6 +1,6 @@
-# StockControl Frontend
+# Stockearly Frontend
 
-React application for the StockControl MVP. It provides manual-first flows for recording sales, purchases, and wastage while consuming real-time updates from the backend via Socket.io.
+React application for the Stockearly MVP. It provides manual-first flows for recording sales, purchases, and wastage while consuming real-time updates from the backend via Socket.io.
 
 ## Stack
 
@@ -47,4 +47,3 @@ React application for the StockControl MVP. It provides manual-first flows for r
 - Add authentication and role-based routing.
 - Extend dashboards with charts and historical trends.
 - Replace manual recording with webhook/OCR automation as backend integrations mature.
-

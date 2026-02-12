@@ -28,6 +28,8 @@ import ManualSaleForm from '../components/manual/ManualSaleForm';
 import ManualPurchaseForm from '../components/manual/ManualPurchaseForm';
 import ManualWastageForm from '../components/manual/ManualWastageForm';
 import { useInventoryStore } from '../hooks/useInventoryStore';
+import { useAuth } from '../contexts/AuthContext';
+import { RequirePermission } from '../components/auth/RequirePermission';
 import type { ManualLogFilters, SaleRecord, PurchaseRecord, WastageRecord } from '../types';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 
@@ -44,6 +46,7 @@ type ManualTabConfig = {
 };
 
 const ManualEntryPage = () => {
+  const { hasPermission } = useAuth();
   const [open, setOpen] = useState(false);
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -272,16 +275,18 @@ const ManualEntryPage = () => {
                         {String(note)}
                       </Typography>
                     )}
-                    <Button
-                      size="small"
-                      color="error"
-                      startIcon={<DeleteOutlineIcon fontSize="small" />}
-                      sx={{ mt: 1.5 }}
-                      onClick={() => setWastageToDelete(wastage)}
-                      disabled={deleteButtonDisabled}
-                    >
-                      Eliminar
-                    </Button>
+                    <RequirePermission resource="manual" action="delete" hide>
+                      <Button
+                        size="small"
+                        color="error"
+                        startIcon={<DeleteOutlineIcon fontSize="small" />}
+                        sx={{ mt: 1.5 }}
+                        onClick={() => setWastageToDelete(wastage)}
+                        disabled={deleteButtonDisabled}
+                      >
+                        Eliminar
+                      </Button>
+                    </RequirePermission>
                     {index !== wastageLog.length - 1 && <Divider sx={{ mt: 2 }} />}
                   </Box>
                 );
@@ -321,12 +326,15 @@ const ManualEntryPage = () => {
   ];
 
   const activeConfig = forms.find((form) => form.value === activeForm) ?? forms[0];
+  const canCreate = hasPermission('manual', 'create');
   const renderInnerContent =
-    activeInnerTab === 'form'
+    activeInnerTab === 'form' && canCreate
       ? activeForm === 'wastage'
         ? <Stack spacing={3}>{activeConfig.component}</Stack>
         : activeConfig.component
-      : activeConfig.renderList();
+      : activeInnerTab === 'list'
+      ? activeConfig.renderList()
+      : <Typography color="text.secondary">No tienes permisos para crear registros manuales</Typography>;
 
   return (
     <>

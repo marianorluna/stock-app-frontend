@@ -19,6 +19,8 @@ import { useForm } from 'react-hook-form';
 import { useInventoryStore } from '../hooks/useInventoryStore';
 import apiClient from '../services/apiClient';
 import type { Ingredient } from '../types';
+import { useAuth } from '../contexts/AuthContext';
+import { RequirePermission } from '../components/auth/RequirePermission';
 import SearchIcon from '@mui/icons-material/Search';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
@@ -45,6 +47,7 @@ const defaultValues: IngredientFormValues = {
 };
 
 const IngredientsPage = () => {
+  const { hasPermission } = useAuth();
   const { ingredients, fetchIngredients, error } = useInventoryStore((state) => ({
     ingredients: state.ingredients,
     fetchIngredients: state.fetchIngredients,
@@ -149,9 +152,11 @@ const IngredientsPage = () => {
       <Grid item xs={12}>
         <Stack direction="row" justifyContent="space-between" alignItems="center">
           <Typography variant="h4">Ingredientes</Typography>
-          <Button variant="contained" onClick={handleOpen}>
-            Nuevo ingrediente
-          </Button>
+          <RequirePermission resource="ingredients" action="create" hide>
+            <Button variant="contained" onClick={handleOpen}>
+              Nuevo ingrediente
+            </Button>
+          </RequirePermission>
         </Stack>
       </Grid>
       {error && (
@@ -191,28 +196,34 @@ const IngredientsPage = () => {
                 {ingredient.productUnit ?? ingredient.purchaseUnit ?? 'g'}
               </Typography>
               <Stack direction="row" spacing={1.5} sx={{ mt: 2 }}>
-                <Button
-                  size="small"
-                  startIcon={<EditOutlinedIcon fontSize="small" />}
-                  onClick={() => handleEdit(ingredient)}
-                >
-                  Editar
-                </Button>
-                <Button
-                  size="small"
-                  startIcon={<ContentCopyIcon fontSize="small" />}
-                  onClick={() => handleDuplicate(ingredient)}
-                >
-                  Duplicar
-                </Button>
-                <Button
-                  size="small"
-                  color="error"
-                  startIcon={<DeleteOutlineIcon fontSize="small" />}
-                  onClick={() => handleDelete(ingredient)}
-                >
-                  Eliminar
-                </Button>
+                <RequirePermission resource="ingredients" action="update" hide>
+                  <Button
+                    size="small"
+                    startIcon={<EditOutlinedIcon fontSize="small" />}
+                    onClick={() => handleEdit(ingredient)}
+                  >
+                    Editar
+                  </Button>
+                </RequirePermission>
+                <RequirePermission resource="ingredients" action="create" hide>
+                  <Button
+                    size="small"
+                    startIcon={<ContentCopyIcon fontSize="small" />}
+                    onClick={() => handleDuplicate(ingredient)}
+                  >
+                    Duplicar
+                  </Button>
+                </RequirePermission>
+                <RequirePermission resource="ingredients" action="delete" hide>
+                  <Button
+                    size="small"
+                    color="error"
+                    startIcon={<DeleteOutlineIcon fontSize="small" />}
+                    onClick={() => handleDelete(ingredient)}
+                  >
+                    Eliminar
+                  </Button>
+                </RequirePermission>
               </Stack>
             </CardContent>
           </Card>
