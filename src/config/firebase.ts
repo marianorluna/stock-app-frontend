@@ -1,7 +1,7 @@
 import { initializeApp, getApps, FirebaseApp } from 'firebase/app';
 import { getAuth, Auth } from 'firebase/auth';
 
-//configuración de Firebase desde variables de entorno
+// Configuración de Firebase desde variables de entorno (en producción definir VITE_FIREBASE_* en Vercel)
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY || 'AIzaSyBL-eefBi23wFPcwMzfLjTuOtljHJmhjhU',
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || 'stockearly-app.firebaseapp.com',

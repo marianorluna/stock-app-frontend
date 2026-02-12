@@ -14,13 +14,15 @@ import type {
   WastageRecord,
   ManualLogFilters,
   WastagePreset,
-  WastagePresetPayload
+  WastagePresetPayload,
+  Supplier
 } from '../types';
 
 type InventoryState = {
   snapshot?: StockSnapshot;
   ingredients: Ingredient[];
   dishes: Dish[];
+  suppliers: Supplier[];
   loading: boolean;
   loadingMessage?: string;
   logsLoading: boolean;
@@ -33,6 +35,7 @@ type InventoryState = {
   fetchSnapshot: () => Promise<void>;
   fetchIngredients: () => Promise<void>;
   fetchDishes: () => Promise<void>;
+  fetchSuppliers: () => Promise<void>;
   createSale: (payload: ManualSalePayload) => Promise<void>;
   createPurchase: (payload: ManualPurchasePayload) => Promise<void>;
   createWastage: (payload: ManualWastagePayload) => Promise<void>;
@@ -52,6 +55,7 @@ export const useInventoryStore = create<InventoryState>()(
     snapshot: undefined,
     ingredients: [],
     dishes: [],
+    suppliers: [],
     loading: false,
     loadingMessage: undefined,
     logsLoading: false,
@@ -126,6 +130,14 @@ export const useInventoryStore = create<InventoryState>()(
         set({ dishes: data });
       } catch {
         set({ error: 'Error cargando recetas' });
+      }
+    },
+    fetchSuppliers: async () => {
+      try {
+        const { data } = await apiClient.get<Supplier[]>('/suppliers');
+        set({ suppliers: data });
+      } catch {
+        set({ error: 'Error cargando proveedores' });
       }
     },
     //registra una venta manual y actualiza el inventario

@@ -88,6 +88,7 @@ export type WastagePreset = {
 };
 
 export type Supplier = {
+  sku: string;
   name: string;
   totalPurchases: number;
   lastPurchase: string | null;

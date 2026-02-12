@@ -108,12 +108,12 @@ const AppShell = ({ children }: AppShellProps) => {
     <Box sx={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', position: 'relative' }}>
       <AppBar position="sticky" color="inherit" sx={{ borderBottom: '1px solid rgba(0,0,0,0.08)' }}>
         <Toolbar>
-          <IconButton edge="start" size="large" color="primary" component={Link} to="/dashboard">
+          <IconButton edge="start" size="large" color="primary" component={Link} to="/">
             <KitchenIcon />
           </IconButton>
           <Typography
             component={Link}
-            to="/dashboard"
+            to="/"
             variant="h6"
             sx={{ flexGrow: 1, fontWeight: 600, textDecoration: 'none', color: 'inherit' }}
           >

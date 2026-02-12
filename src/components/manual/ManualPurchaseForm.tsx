@@ -15,8 +15,12 @@ const defaultValues: ManualPurchasePayload = {
 };
 
 const ManualPurchaseForm = ({ onSubmitted }: Props) => {
-  const { ingredients, fetchIngredients } = useInventoryStore();
+  const { ingredients, suppliers, fetchIngredients, fetchSuppliers } = useInventoryStore();
   const ingredientOptions = ingredients.map((ingredient) => ({ label: ingredient.name, value: ingredient._id }));
+  const supplierOptions = [
+    { label: 'Sin especificar', value: '' },
+    ...suppliers.map((s) => ({ label: `${s.name} (${s.sku})`, value: s.sku }))
+  ];
   const createPurchase = useInventoryStore((state) => state.createPurchase);
   const {
     control,
@@ -33,7 +37,8 @@ const ManualPurchaseForm = ({ onSubmitted }: Props) => {
 
   useEffect(() => {
     void fetchIngredients();
-  }, [fetchIngredients]);
+    void fetchSuppliers();
+  }, [fetchIngredients, fetchSuppliers]);
 
   const onSubmit = handleSubmit(async (values) => {
     await createPurchase(values);
@@ -48,7 +53,20 @@ const ManualPurchaseForm = ({ onSubmitted }: Props) => {
           Registrar compra manual
         </Typography>
         <Stack spacing={2} component="form" onSubmit={onSubmit}>
-          <Controller control={control} name="supplier" render={({ field }) => <TextField label="Proveedor" {...field} />} />
+          <Controller
+            control={control}
+            name="supplier"
+            render={({ field }) => (
+              <Autocomplete
+                sx={{ minWidth: 240 }}
+                options={supplierOptions}
+                value={supplierOptions.find((o) => o.value === (field.value ?? '')) ?? supplierOptions[0]}
+                onChange={(_, value) => field.onChange(value?.value ?? '')}
+                isOptionEqualToValue={(option, value) => option.value === value.value}
+                renderInput={(params) => <TextField {...params} label="Proveedor" />}
+              />
+            )}
+          />
           <Controller control={control} name="invoiceNumber" render={({ field }) => <TextField label="Factura" {...field} />} />
           {fields.map((field, index) => (
             <Stack key={field.id} direction={{ xs: 'column', sm: 'row' }} spacing={2}>

@@ -24,8 +24,8 @@ const UnauthorizedPage = () => {
         <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
           No tienes permisos para acceder a esta página.
         </Typography>
-        <Button variant="contained" onClick={() => navigate('/dashboard')}>
-          Volver al Dashboard
+        <Button variant="contained" onClick={() => navigate('/')}>
+          Volver al inicio
         </Button>
       </Box>
     </Container>
