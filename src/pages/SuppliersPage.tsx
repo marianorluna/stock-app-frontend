@@ -1,19 +1,23 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
+  Button,
   Card,
   CardContent,
   CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  FormControl,
   Grid,
   InputAdornment,
+  InputLabel,
+  MenuItem,
+  Select,
   Stack,
   TextField,
-  Typography,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Button
+  Typography
 } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
@@ -46,6 +50,7 @@ const SuppliersPage = () => {
   const [dialogMode, setDialogMode] = useState<'edit' | 'duplicate'>('edit');
   const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(null);
   const [formValue, setFormValue] = useState('');
+  const [duplicateTargetSku, setDuplicateTargetSku] = useState<string>('');
   const [processing, setProcessing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<Supplier | null>(null);
 
@@ -76,13 +81,15 @@ const SuppliersPage = () => {
     setSelectedSupplier(supplier);
     setDialogMode('edit');
     setFormValue(supplier.name);
+    setDuplicateTargetSku('');
     setDialogOpen(true);
   };
 
   const handleDuplicate = (supplier: Supplier) => {
     setSelectedSupplier(supplier);
     setDialogMode('duplicate');
-    setFormValue(`${supplier.name} (copia)`);
+    setFormValue('');
+    setDuplicateTargetSku('');
     setDialogOpen(true);
   };
 
@@ -92,7 +99,7 @@ const SuppliersPage = () => {
 
   const confirmDeleteSupplier = async () => {
     if (!confirmDelete) return;
-    await apiClient.delete(`/suppliers/${encodeURIComponent(confirmDelete.name)}`);
+    await apiClient.delete(`/suppliers/${encodeURIComponent(confirmDelete.sku)}`);
     setConfirmDelete(null);
     await fetchSuppliers();
   };
@@ -101,25 +108,29 @@ const SuppliersPage = () => {
     setDialogOpen(false);
     setSelectedSupplier(null);
     setFormValue('');
+    setDuplicateTargetSku('');
     setProcessing(false);
   };
 
   const handleDialogSubmit = async () => {
     if (!selectedSupplier) return;
-    const trimmed = formValue.trim();
-    if (!trimmed) return;
     setProcessing(true);
-    const encodedName = encodeURIComponent(selectedSupplier.name);
+    const encodedSku = encodeURIComponent(selectedSupplier.sku);
 
     if (dialogMode === 'edit') {
-      await apiClient.put(`/suppliers/${encodedName}`, { newName: trimmed });
+      const trimmed = formValue.trim();
+      if (!trimmed) return;
+      await apiClient.put(`/suppliers/${encodedSku}`, { newName: trimmed });
     } else {
-      await apiClient.post(`/suppliers/${encodedName}/duplicate`, { newName: trimmed });
+      if (!duplicateTargetSku.trim()) return;
+      await apiClient.post(`/suppliers/${encodedSku}/duplicate`, { newSku: duplicateTargetSku.trim() });
     }
 
     handleDialogClose();
     await fetchSuppliers();
   };
+
+  const duplicateTargetOptions = suppliers.filter((s) => s.sku !== selectedSupplier?.sku);
 
   return (
     <Grid container spacing={3} sx={{ py: 0 }}>
@@ -166,7 +177,7 @@ const SuppliersPage = () => {
       )}
 
       {filteredSuppliers.map((supplier) => (
-        <Grid item xs={12} md={6} key={supplier.name}>
+        <Grid item xs={12} md={6} key={supplier.sku}>
           <Card variant="outlined">
             <CardContent>
               <Typography variant="h6">{supplier.name}</Typography>
@@ -212,22 +223,60 @@ const SuppliersPage = () => {
       ))}
 
       <Dialog open={dialogOpen} onClose={handleDialogClose} fullWidth maxWidth="xs">
-        <DialogTitle>{dialogMode === 'edit' ? 'Editar proveedor' : 'Duplicar proveedor'}</DialogTitle>
+        <DialogTitle>{dialogMode === 'edit' ? 'Editar proveedor' : 'Duplicar compras a proveedor'}</DialogTitle>
         <DialogContent>
-          <TextField
-            autoFocus
-            margin="dense"
-            label="Nombre del proveedor"
-            fullWidth
-            value={formValue}
-            onChange={(event) => setFormValue(event.target.value)}
-          />
+          {dialogMode === 'edit' ? (
+            <TextField
+              autoFocus
+              margin="dense"
+              label="Nombre del proveedor"
+              fullWidth
+              value={formValue}
+              onChange={(event) => setFormValue(event.target.value)}
+            />
+          ) : (
+            <>
+              <FormControl fullWidth margin="dense">
+                <InputLabel id="duplicate-target">Proveedor destino</InputLabel>
+                <Select
+                  labelId="duplicate-target"
+                  label="Proveedor destino"
+                  value={duplicateTargetSku}
+                  onChange={(event) => setDuplicateTargetSku(event.target.value)}
+                >
+                  {duplicateTargetOptions.map((s) => (
+                    <MenuItem key={s.sku} value={s.sku}>
+                      {s.name} ({s.sku})
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              {duplicateTargetOptions.length === 0 ? (
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+                  No hay otros proveedores para copiar las compras.
+                </Typography>
+              ) : (
+                <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+                  Se copiarán las compras de &quot;{selectedSupplier?.name}&quot; al proveedor seleccionado.
+                </Typography>
+              )}
+            </>
+          )}
         </DialogContent>
         <DialogActions>
           <Button onClick={handleDialogClose} disabled={processing}>
             Cancelar
           </Button>
-          <Button onClick={handleDialogSubmit} variant="contained" disabled={processing || !formValue.trim()}>
+          <Button
+            onClick={handleDialogSubmit}
+            variant="contained"
+            disabled={
+              processing ||
+              (dialogMode === 'edit'
+                ? !formValue.trim()
+                : !duplicateTargetSku.trim() || duplicateTargetOptions.length === 0)
+            }
+          >
             {dialogMode === 'edit' ? 'Guardar cambios' : 'Duplicar'}
           </Button>
         </DialogActions>

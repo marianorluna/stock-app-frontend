@@ -56,18 +56,22 @@ const ManualEntryPage = () => {
     salesLog,
     purchasesLog,
     wastageLog,
+    suppliers,
     logsLoading,
     manualFilters,
     fetchManualLogs,
+    fetchSuppliers,
     setManualFilters,
     deleteWastage
   } = useInventoryStore((state) => ({
     salesLog: state.salesLog,
     purchasesLog: state.purchasesLog,
     wastageLog: state.wastageLog,
+    suppliers: state.suppliers,
     logsLoading: state.logsLoading,
     manualFilters: state.manualFilters,
     fetchManualLogs: state.fetchManualLogs,
+    fetchSuppliers: state.fetchSuppliers,
     setManualFilters: state.setManualFilters,
     deleteWastage: state.deleteWastage
   }));
@@ -88,7 +92,8 @@ const ManualEntryPage = () => {
 
   useEffect(() => {
     void fetchManualLogs();
-  }, [fetchManualLogs]);
+    void fetchSuppliers();
+  }, [fetchManualLogs, fetchSuppliers]);
 
   const handleDateFilterChange =
     (field: keyof ManualLogFilters) =>
@@ -119,6 +124,12 @@ const ManualEntryPage = () => {
   const getIngredientName = (
     ingredient: PurchaseRecord['items'][number]['ingredient'] | WastageRecord['items'][number]['ingredient']
   ) => (typeof ingredient === 'string' ? ingredient : ingredient?.name ?? '');
+
+  const getSupplierName = (sku: string | undefined) => {
+    if (!sku) return 'Proveedor sin especificar';
+    const supplier = suppliers.find((s) => s.sku === sku);
+    return supplier?.name ?? sku;
+  };
 
   const renderDateFilters = () => (
     <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ mb: 3 }}>
@@ -212,7 +223,7 @@ const ManualEntryPage = () => {
                 return (
                   <Box key={purchase._id} sx={{ mb: index === purchasesLog.length - 1 ? 0 : 2 }}>
                     <Typography variant="subtitle2">
-                      {formatDateTime(purchase.timestamp)} • {purchase.supplier ?? 'Proveedor sin especificar'}
+                      {formatDateTime(purchase.timestamp)} • {getSupplierName(purchase.supplier)}
                     </Typography>
                     <Stack spacing={0.5} sx={{ mt: 1 }}>
                       {purchase.items.map((item, itemIndex) => (
