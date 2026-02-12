@@ -20,6 +20,8 @@ import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import apiClient from '../services/apiClient';
+import { useAuth } from '../contexts/AuthContext';
+import { RequirePermission } from '../components/auth/RequirePermission';
 import type { Supplier } from '../types';
 
 const formatDate = (value: string | null) => {
@@ -175,28 +177,34 @@ const SuppliersPage = () => {
                 Última compra: {formatDate(supplier.lastPurchase)}
               </Typography>
               <Stack direction="row" spacing={1.5} sx={{ mt: 2 }}>
-                <Button
-                  size="small"
-                  startIcon={<EditOutlinedIcon fontSize="small" />}
-                  onClick={() => handleEdit(supplier)}
-                >
-                  Editar
-                </Button>
-                <Button
-                  size="small"
-                  startIcon={<ContentCopyIcon fontSize="small" />}
-                  onClick={() => handleDuplicate(supplier)}
-                >
-                  Duplicar
-                </Button>
-                <Button
-                  size="small"
-                  color="error"
-                  startIcon={<DeleteOutlineIcon fontSize="small" />}
-                  onClick={() => handleDelete(supplier)}
-                >
-                  Eliminar
-                </Button>
+                <RequirePermission resource="suppliers" action="update" hide>
+                  <Button
+                    size="small"
+                    startIcon={<EditOutlinedIcon fontSize="small" />}
+                    onClick={() => handleEdit(supplier)}
+                  >
+                    Editar
+                  </Button>
+                </RequirePermission>
+                <RequirePermission resource="suppliers" action="create" hide>
+                  <Button
+                    size="small"
+                    startIcon={<ContentCopyIcon fontSize="small" />}
+                    onClick={() => handleDuplicate(supplier)}
+                  >
+                    Duplicar
+                  </Button>
+                </RequirePermission>
+                <RequirePermission resource="suppliers" action="delete" hide>
+                  <Button
+                    size="small"
+                    color="error"
+                    startIcon={<DeleteOutlineIcon fontSize="small" />}
+                    onClick={() => handleDelete(supplier)}
+                  >
+                    Eliminar
+                  </Button>
+                </RequirePermission>
               </Stack>
             </CardContent>
           </Card>
