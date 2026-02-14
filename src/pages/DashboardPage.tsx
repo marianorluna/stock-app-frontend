@@ -69,12 +69,32 @@ const DashboardPage = () => {
 
     const total = Object.values(aggregated).reduce((sum, value) => sum + value, 0);
 
+    // Mapear categorías nuevas a categorías antiguas para el gráfico
+    const categoryMapping: Record<string, string> = {
+      'bebida': 'beverage',
+      'cafe': 'coffee',
+      'condimentos': 'ingredient',
+      'frutas': 'ingredient',
+      'cereales': 'ingredient',
+      'lacteos': 'ingredient',
+      'otros': 'ingredient',
+      'proteinas': 'ingredient',
+      'vegetales': 'ingredient'
+    };
+
+    // Agregar categorías mapeadas
+    const mappedAggregated: Record<string, number> = {};
+    Object.entries(aggregated).forEach(([category, value]) => {
+      const mappedCategory = categoryMapping[category] || category;
+      mappedAggregated[mappedCategory] = (mappedAggregated[mappedCategory] ?? 0) + value;
+    });
+
     const segments = (['ingredient', 'beverage', 'coffee'] as const)
-      .filter((category) => (aggregated[category] ?? 0) > 0)
+      .filter((category) => (mappedAggregated[category] ?? 0) > 0)
       .map((category) => ({
         key: category,
         label: category === 'ingredient' ? 'Ingredientes' : category === 'coffee' ? 'Café' : 'Bebidas',
-        value: aggregated[category] ?? 0,
+        value: mappedAggregated[category] ?? 0,
         color: palette[category]
       }));
 

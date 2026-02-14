@@ -63,11 +63,24 @@ const InventoryPage = () => {
                 <CardContent>
                   <Stack spacing={1}>
                     <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase' }}>
-                      {item.category === 'ingredient'
-                        ? 'Ingrediente'
-                        : item.category === 'coffee'
-                          ? 'Café'
-                          : 'Bebida'}
+                      {(() => {
+                        // Mapear categorías nuevas a etiquetas
+                        const categoryLabels: Record<string, string> = {
+                          'ingredient': 'Ingrediente',
+                          'beverage': 'Bebida',
+                          'coffee': 'Café',
+                          'bebida': 'Bebida',
+                          'cafe': 'Café',
+                          'condimentos': 'Condimentos',
+                          'frutas': 'Frutas',
+                          'cereales': 'Cereales',
+                          'lacteos': 'Lácteos',
+                          'otros': 'Otros',
+                          'proteinas': 'Proteínas',
+                          'vegetales': 'Vegetales'
+                        };
+                        return categoryLabels[item.category] || item.category;
+                      })()}
                     </Typography>
                     <Typography variant="subtitle1" fontWeight={600}>
                       {item.name}

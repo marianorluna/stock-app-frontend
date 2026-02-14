@@ -23,12 +23,19 @@ export type StockSnapshot = {
 export type Ingredient = {
   _id: string;
   name: string;
+  sku: string;
   stock: number;
+  stockUnit: 'u' | 'g' | 'ml';
   purchaseUnit: string;
-  productUnit: string;
-  conversionFactorToGrams: number;
+  conversionFactor: number;
+  conversionUnit: 'u' | 'g' | 'ml';
   reorderPoint: number;
-  category: 'ingredient' | 'beverage' | 'coffee';
+  category: 'bebida' | 'cafe' | 'condimentos' | 'frutas' | 'cereales' | 'lacteos' | 'otros' | 'proteinas' | 'vegetales';
+  allergens: string[];
+  codeArticlePurchase: string;
+  // Campos de compatibilidad (virtuals del backend)
+  productUnit?: string;
+  conversionFactorToGrams?: number;
 };
 
 export type RecipeIngredient = {

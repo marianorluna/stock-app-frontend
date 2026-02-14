@@ -296,8 +296,12 @@ const ManualWastageForm = ({ onSubmitted }: Props) => {
                 render={({ field: unitField }) => {
                   const selectedIngredientId = watchedItems?.[index]?.ingredient;
                   const selectedIngredient = ingredients.find((candidate) => candidate._id === selectedIngredientId);
-                  const category = selectedIngredient?.category ?? 'ingredient';
-                  const productUnit = selectedIngredient?.productUnit?.trim();
+                  const category = selectedIngredient?.category ?? 'otros';
+                  // Categorías que tradicionalmente usan gramos
+                  const bulkCategories = ['condimentos', 'frutas', 'cereales', 'lacteos', 'otros', 'proteinas', 'vegetales'];
+                  const isBulkCategory = category && bulkCategories.includes(category);
+                  const isCoffeeCategory = category === 'cafe';
+                  const productUnit = selectedIngredient?.stockUnit ?? selectedIngredient?.productUnit?.trim();
                   const purchaseUnit = selectedIngredient?.purchaseUnit?.trim();
                   const meaningfulProductUnit =
                     productUnit &&
@@ -306,12 +310,12 @@ const ManualWastageForm = ({ onSubmitted }: Props) => {
                     {
                       value: 'grams',
                       label: 'Gramos',
-                      disabled: !(category === 'ingredient' || category === 'coffee')
+                      disabled: !(isBulkCategory || isCoffeeCategory)
                     },
                     {
                       value: 'unit',
                       label: 'Unidades',
-                      disabled: category === 'ingredient' || category === 'coffee'
+                      disabled: isBulkCategory || isCoffeeCategory
                     },
                     ...(meaningfulProductUnit
                       ? [
