@@ -72,7 +72,7 @@ const DrinksPage = () => {
   }, [fetchIngredients, fetchDishes]);
 
   const beverageIngredients = useMemo(
-    () => ingredients.filter((ingredient) => ingredient.category === 'beverage' || ingredient.category === 'coffee'),
+    () => ingredients.filter((ingredient) => ingredient.category === 'bebida' || ingredient.category === 'cafe'),
     [ingredients]
   );
 
@@ -136,7 +136,9 @@ const DrinksPage = () => {
       return `${ingredientName} • ${recipeItem.quantityInGrams} g`;
     }
 
-    if (ingredient.category === 'ingredient') {
+    // Categorías que tradicionalmente usan gramos
+    const bulkCategories = ['condimentos', 'frutas', 'cereales', 'lacteos', 'otros', 'proteinas', 'vegetales'];
+    if (bulkCategories.includes(ingredient.category)) {
       return `${ingredientName} • ${recipeItem.quantityInGrams} g`;
     }
 
@@ -146,7 +148,7 @@ const DrinksPage = () => {
       minimumFractionDigits: Number.isInteger(quantityInUnits) ? 0 : 2,
       maximumFractionDigits: 2
     }).format(quantityInUnits);
-    const rawUnit = ingredient.productUnit?.trim();
+    const rawUnit = ingredient.stockUnit ?? ingredient.productUnit?.trim();
     const unitMatch = rawUnit?.match(/^([^(]+?)(?:\((.+)\))?$/);
     const baseUnit = unitMatch?.[1]?.trim() || 'unidad';
     const detail = unitMatch?.[2]?.trim();
@@ -199,7 +201,9 @@ const DrinksPage = () => {
               ingredientDoc && ingredientDoc.conversionFactorToGrams && ingredientDoc.conversionFactorToGrams > 0
                 ? ingredientDoc.conversionFactorToGrams
                 : 1;
-            const isIngredientCategory = ingredientDoc?.category === 'ingredient';
+            // Categorías que tradicionalmente usan gramos
+            const bulkCategories = ['condimentos', 'frutas', 'cereales', 'lacteos', 'otros', 'proteinas', 'vegetales'];
+            const isIngredientCategory = ingredientDoc && bulkCategories.includes(ingredientDoc.category);
             let quantity = isIngredientCategory ? item.quantityInGrams : item.quantityInGrams / conversion;
             if (!isIngredientCategory) {
               quantity = Number(quantity.toFixed(2));
@@ -366,13 +370,16 @@ const DrinksPage = () => {
               {fields.map((field, index) => {
                 const selectedIngredientId = watchedRecipe?.[index]?.ingredient;
                 const selectedIngredient = beverageIngredients.find((ingredient) => ingredient._id === selectedIngredientId);
-                const rawUnit = selectedIngredient?.productUnit?.trim();
+                const rawUnit = selectedIngredient?.stockUnit ?? selectedIngredient?.productUnit?.trim();
                 const cleanedUnit =
                   rawUnit && rawUnit.includes('(') && rawUnit.includes(')')
                     ? rawUnit.replace(/\s*\(.*\)\s*/g, '').trim()
                     : rawUnit;
+                // Categorías que tradicionalmente usan gramos
+                const bulkCategories = ['condimentos', 'frutas', 'cereales', 'lacteos', 'otros', 'proteinas', 'vegetales'];
+                const isBulkCategory = selectedIngredient && bulkCategories.includes(selectedIngredient.category);
                 const unitLabel =
-                  selectedIngredient?.category === 'ingredient'
+                  isBulkCategory
                     ? 'g'
                     : cleanedUnit && cleanedUnit.length > 0
                     ? cleanedUnit

@@ -28,22 +28,30 @@ import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 
 type IngredientFormValues = {
   name: string;
+  sku: string;
   stock: number;
+  stockUnit: 'u' | 'g' | 'ml';
   purchaseUnit: string;
-  productUnit: string;
-  conversionFactorToGrams: number;
+  conversionFactor: number;
+  conversionUnit: 'u' | 'g' | 'ml';
   reorderPoint: number;
-  category: 'ingredient' | 'beverage' | 'coffee';
+  category: 'bebida' | 'cafe' | 'condimentos' | 'frutas' | 'cereales' | 'lacteos' | 'otros' | 'proteinas' | 'vegetales';
+  allergens: string[];
+  codeArticlePurchase: string;
 };
 
 const defaultValues: IngredientFormValues = {
   name: '',
+  sku: '',
   stock: 0,
-  purchaseUnit: 'g',
-  productUnit: 'g',
-  conversionFactorToGrams: 1,
+  stockUnit: 'g',
+  purchaseUnit: 'unidad',
+  conversionFactor: 1,
+  conversionUnit: 'g',
   reorderPoint: 0,
-  category: 'ingredient'
+  category: 'otros',
+  allergens: [],
+  codeArticlePurchase: ''
 };
 
 const IngredientsPage = () => {
@@ -71,8 +79,10 @@ const IngredientsPage = () => {
 
   const filteredIngredients = useMemo(() => {
     const normalizedTerm = searchTerm.trim().toLowerCase();
+    // Filtrar categorías que tradicionalmente eran "ingredient"
+    const ingredientCategories = ['condimentos', 'frutas', 'cereales', 'lacteos', 'otros', 'proteinas', 'vegetales'];
     return ingredients
-      .filter((ingredient) => ingredient.category === 'ingredient')
+      .filter((ingredient) => ingredientCategories.includes(ingredient.category))
       .filter((ingredient) => ingredient.name.toLowerCase().includes(normalizedTerm));
   }, [ingredients, searchTerm]);
 
@@ -88,12 +98,16 @@ const IngredientsPage = () => {
     setSelectedIngredient(ingredient);
     reset({
       name: ingredient.name,
+      sku: ingredient.sku ?? '',
       stock: ingredient.stock,
-      purchaseUnit: ingredient.purchaseUnit ?? 'g',
-      productUnit: ingredient.productUnit ?? ingredient.purchaseUnit ?? 'g',
-      conversionFactorToGrams: ingredient.conversionFactorToGrams ?? 1,
+      stockUnit: ingredient.stockUnit ?? 'g',
+      purchaseUnit: ingredient.purchaseUnit ?? 'unidad',
+      conversionFactor: ingredient.conversionFactor ?? 1,
+      conversionUnit: ingredient.conversionUnit ?? 'g',
       reorderPoint: ingredient.reorderPoint ?? 0,
-      category: ingredient.category ?? 'ingredient'
+      category: ingredient.category ?? 'otros',
+      allergens: ingredient.allergens ?? [],
+      codeArticlePurchase: ingredient.codeArticlePurchase ?? ''
     });
     setOpen(true);
   };
@@ -103,12 +117,16 @@ const IngredientsPage = () => {
     setSelectedIngredient(ingredient);
     reset({
       name: `${ingredient.name} (copia)`,
+      sku: `${ingredient.sku ?? ''}-COPY`,
       stock: ingredient.stock,
-      purchaseUnit: ingredient.purchaseUnit ?? 'g',
-      productUnit: ingredient.productUnit ?? ingredient.purchaseUnit ?? 'g',
-      conversionFactorToGrams: ingredient.conversionFactorToGrams ?? 1,
+      stockUnit: ingredient.stockUnit ?? 'g',
+      purchaseUnit: ingredient.purchaseUnit ?? 'unidad',
+      conversionFactor: ingredient.conversionFactor ?? 1,
+      conversionUnit: ingredient.conversionUnit ?? 'g',
       reorderPoint: ingredient.reorderPoint ?? 0,
-      category: ingredient.category ?? 'ingredient'
+      category: ingredient.category ?? 'otros',
+      allergens: ingredient.allergens ?? [],
+      codeArticlePurchase: ingredient.codeArticlePurchase ?? ''
     });
     setOpen(true);
   };
@@ -189,11 +207,11 @@ const IngredientsPage = () => {
               </Typography>
               <Typography variant="body2" color="text.secondary">
                 Stock: {ingredient.stock}{' '}
-                {ingredient.productUnit ?? ingredient.purchaseUnit ?? 'g'}
+                {ingredient.stockUnit ?? ingredient.productUnit ?? 'g'}
               </Typography>
               <Typography variant="body2" color="text.secondary">
                 Punto de pedido: {ingredient.reorderPoint}{' '}
-                {ingredient.productUnit ?? ingredient.purchaseUnit ?? 'g'}
+                {ingredient.stockUnit ?? ingredient.productUnit ?? 'g'}
               </Typography>
               <Stack direction="row" spacing={1.5} sx={{ mt: 2 }}>
                 <RequirePermission resource="ingredients" action="update" hide>
@@ -235,20 +253,33 @@ const IngredientsPage = () => {
         <DialogContent>
           <Stack spacing={2} sx={{ mt: 1 }}>
             <TextField label="Nombre" {...register('name', { required: true })} />
+            <TextField label="SKU" {...register('sku', { required: true })} />
             <TextField label="Stock inicial" type="number" {...register('stock', { valueAsNumber: true })} />
-            <TextField label="Unidad de compra" {...register('purchaseUnit', { required: true })} />
-            <TextField label="Unidad de producto" {...register('productUnit', { required: true })} />
-            <TextField
-              label="Factor conversión a gramos"
-              type="number"
-              {...register('conversionFactorToGrams', { valueAsNumber: true })}
-            />
-            <TextField label="Punto de pedido" type="number" {...register('reorderPoint', { valueAsNumber: true })} />
-            <TextField label="Categoría" select defaultValue={defaultValues.category} {...register('category', { required: true })}>
-              <MenuItem value="ingredient">Ingrediente</MenuItem>
-              <MenuItem value="beverage">Bebida</MenuItem>
-              <MenuItem value="coffee">Café</MenuItem>
+            <TextField label="Unidad de stock" select {...register('stockUnit', { required: true })}>
+              <MenuItem value="u">Unidades (u)</MenuItem>
+              <MenuItem value="g">Gramos (g)</MenuItem>
+              <MenuItem value="ml">Mililitros (ml)</MenuItem>
             </TextField>
+            <TextField label="Unidad de compra" {...register('purchaseUnit', { required: true })} />
+            <TextField label="Factor de conversión" type="number" {...register('conversionFactor', { valueAsNumber: true, required: true })} />
+            <TextField label="Unidad de conversión" select {...register('conversionUnit', { required: true })}>
+              <MenuItem value="u">Unidades (u)</MenuItem>
+              <MenuItem value="g">Gramos (g)</MenuItem>
+              <MenuItem value="ml">Mililitros (ml)</MenuItem>
+            </TextField>
+            <TextField label="Punto de pedido" type="number" {...register('reorderPoint', { valueAsNumber: true })} />
+            <TextField label="Categoría" select {...register('category', { required: true })}>
+              <MenuItem value="bebida">Bebida</MenuItem>
+              <MenuItem value="cafe">Café</MenuItem>
+              <MenuItem value="condimentos">Condimentos</MenuItem>
+              <MenuItem value="frutas">Frutas</MenuItem>
+              <MenuItem value="cereales">Cereales</MenuItem>
+              <MenuItem value="lacteos">Lácteos</MenuItem>
+              <MenuItem value="otros">Otros</MenuItem>
+              <MenuItem value="proteinas">Proteínas</MenuItem>
+              <MenuItem value="vegetales">Vegetales</MenuItem>
+            </TextField>
+            <TextField label="Código artículo compra" {...register('codeArticlePurchase')} />
           </Stack>
         </DialogContent>
         <DialogActions>
