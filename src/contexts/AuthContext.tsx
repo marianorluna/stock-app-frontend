@@ -32,6 +32,7 @@ interface AuthContextType {
   logout: () => Promise<void>;
   hasPermission: (resource: string, action: string) => boolean;
   hasRole: (role: string) => boolean;
+  hasAnyRole: (roles: string[]) => boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -187,6 +188,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return user?.role === role;
   };
 
+  //verifica si el usuario tiene alguno de los roles especificados
+  const hasAnyRole = (roles: string[]): boolean => {
+    if (!user) return false;
+    return roles.includes(user.role);
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -197,7 +204,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         register,
         logout,
         hasPermission,
-        hasRole
+        hasRole,
+        hasAnyRole
       }}
     >
       {children}
