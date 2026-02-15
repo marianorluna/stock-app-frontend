@@ -5,6 +5,7 @@ import { Box, CircularProgress } from '@mui/material';
 interface ProtectedRouteProps {
   children: React.ReactNode;
   requiredRole?: string;
+  requiredRoles?: string[];
   requiredPermission?: {
     resource: string;
     action: string;
@@ -15,9 +16,10 @@ interface ProtectedRouteProps {
 export const ProtectedRoute = ({ 
   children, 
   requiredRole,
+  requiredRoles,
   requiredPermission 
 }: ProtectedRouteProps) => {
-  const { user, loading, hasPermission, hasRole } = useAuth();
+  const { user, loading, hasPermission, hasRole, hasAnyRole } = useAuth();
 
   if (loading) {
     return (
@@ -32,6 +34,10 @@ export const ProtectedRoute = ({
   }
 
   if (requiredRole && !hasRole(requiredRole)) {
+    return <Navigate to="/unauthorized" replace />;
+  }
+
+  if (requiredRoles && !hasAnyRole(requiredRoles)) {
     return <Navigate to="/unauthorized" replace />;
   }
 

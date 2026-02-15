@@ -155,392 +155,392 @@ const DashboardPage = () => {
       </Typography>
 
       <Grid container spacing={3}>
-          {error && (
-            <Grid item xs={12}>
-              <Alert severity="error">{error}</Alert>
-            </Grid>
-          )}
+        {error && (
           <Grid item xs={12}>
-            <Grid container spacing={2}>
-              <Grid item xs={6}>
-                <Box
-                  component={Link}
-                  to="/ingredients"
-                  sx={{ 
-                    textDecoration: 'none',
-                    display: 'block'
+            <Alert severity="error">{error}</Alert>
+          </Grid>
+        )}
+        <Grid item xs={12}>
+          <Grid container spacing={2}>
+            <Grid item xs={6}>
+              <Box
+                component={Link}
+                to="/ingredients"
+                sx={{
+                  textDecoration: 'none',
+                  display: 'block'
+                }}
+              >
+                <Card
+                  variant="outlined"
+                  sx={{
+                    textAlign: 'left',
+                    width: '100%',
+                    cursor: 'pointer',
+                    transition: 'transform 0.2s, box-shadow 0.2s',
+                    '&:hover': {
+                      transform: 'translateY(-2px)',
+                      boxShadow: 3
+                    }
                   }}
                 >
-                  <Card
-                    variant="outlined"
-                    sx={{ 
-                      textAlign: 'left', 
-                      width: '100%',
-                      cursor: 'pointer',
-                      transition: 'transform 0.2s, box-shadow 0.2s',
-                      '&:hover': {
-                        transform: 'translateY(-2px)',
-                        boxShadow: 3
-                      }
-                    }}
-                  >
-                    <CardContent>
-                      <Typography variant="subtitle2" color="text.secondary">
-                        Ingredientes
-                      </Typography>
-                      <Typography variant="h4">{totals.ingredients.total}</Typography>
-                    </CardContent>
-                  </Card>
-                </Box>
-              </Grid>
-              <Grid item xs={6}>
-                <Box
-                  component={Link}
-                  to="/ingredients"
-                  sx={{ 
-                    textDecoration: 'none',
-                    display: 'block'
+                  <CardContent>
+                    <Typography variant="subtitle2" color="text.secondary">
+                      Ingredientes
+                    </Typography>
+                    <Typography variant="h4">{totals.ingredients.total}</Typography>
+                  </CardContent>
+                </Card>
+              </Box>
+            </Grid>
+            <Grid item xs={6}>
+              <Box
+                component={Link}
+                to="/inventory/stock"
+                sx={{
+                  textDecoration: 'none',
+                  display: 'block'
+                }}
+              >
+                <Card
+                  variant="outlined"
+                  sx={{
+                    textAlign: 'left',
+                    width: '100%',
+                    cursor: 'pointer',
+                    transition: 'transform 0.2s, box-shadow 0.2s',
+                    '&:hover': {
+                      transform: 'translateY(-2px)',
+                      boxShadow: 3
+                    }
                   }}
                 >
-                  <Card
-                    variant="outlined"
-                    sx={{ 
-                      textAlign: 'left', 
-                      width: '100%',
-                      cursor: 'pointer',
-                      transition: 'transform 0.2s, box-shadow 0.2s',
-                      '&:hover': {
-                        transform: 'translateY(-2px)',
-                        boxShadow: 3
-                      }
-                    }}
-                  >
-                    <CardContent>
-                      <Typography variant="subtitle2" color="text.secondary">
-                        Faltantes
-                      </Typography>
-                      <Typography variant="h4" color={totals.ingredients.lowStock > 0 ? 'error' : 'primary'}>
-                        {totals.ingredients.lowStock}
-                      </Typography>
-                    </CardContent>
-                  </Card>
-                </Box>
-              </Grid>
+                  <CardContent>
+                    <Typography variant="subtitle2" color="text.secondary">
+                      Faltantes
+                    </Typography>
+                    <Typography variant="h4" color={totals.ingredients.lowStock > 0 ? 'error' : 'primary'}>
+                      {totals.ingredients.lowStock}
+                    </Typography>
+                  </CardContent>
+                </Card>
+              </Box>
             </Grid>
           </Grid>
-          <Grid item xs={12}>
-            <Grid container spacing={2}>
-              <Grid item xs={6}>
-                <Box
-                  component={Link}
-                  to="/drinks"
-                  sx={{ 
-                    textDecoration: 'none',
-                    display: 'block'
+        </Grid>
+        <Grid item xs={12}>
+          <Grid container spacing={2}>
+            <Grid item xs={6}>
+              <Box
+                component={Link}
+                to="/drinks"
+                sx={{
+                  textDecoration: 'none',
+                  display: 'block'
+                }}
+              >
+                <Card
+                  variant="outlined"
+                  sx={{
+                    textAlign: 'left',
+                    width: '100%',
+                    cursor: 'pointer',
+                    transition: 'transform 0.2s, box-shadow 0.2s',
+                    '&:hover': {
+                      transform: 'translateY(-2px)',
+                      boxShadow: 3
+                    }
                   }}
                 >
-                  <Card
-                    variant="outlined"
-                    sx={{ 
-                      textAlign: 'left', 
-                      width: '100%',
-                      cursor: 'pointer',
-                      transition: 'transform 0.2s, box-shadow 0.2s',
-                      '&:hover': {
-                        transform: 'translateY(-2px)',
-                        boxShadow: 3
-                      }
-                    }}
-                  >
-                    <CardContent>
-                      <Typography variant="subtitle2" color="text.secondary">
-                        Bebidas & Café
-                      </Typography>
-                      <Typography variant="h4">{totals.beverages.total}</Typography>
-                    </CardContent>
-                  </Card>
-                </Box>
-              </Grid>
-              <Grid item xs={6}>
-                <Box
-                  component={Link}
-                  to="/drinks"
-                  sx={{ 
-                    textDecoration: 'none',
-                    display: 'block'
+                  <CardContent>
+                    <Typography variant="subtitle2" color="text.secondary">
+                      Bebidas & Café
+                    </Typography>
+                    <Typography variant="h4">{totals.beverages.total}</Typography>
+                  </CardContent>
+                </Card>
+              </Box>
+            </Grid>
+            <Grid item xs={6}>
+              <Box
+                component={Link}
+                to="/inventory/stock"
+                sx={{
+                  textDecoration: 'none',
+                  display: 'block'
+                }}
+              >
+                <Card
+                  variant="outlined"
+                  sx={{
+                    textAlign: 'left',
+                    width: '100%',
+                    cursor: 'pointer',
+                    transition: 'transform 0.2s, box-shadow 0.2s',
+                    '&:hover': {
+                      transform: 'translateY(-2px)',
+                      boxShadow: 3
+                    }
                   }}
                 >
-                  <Card
-                    variant="outlined"
-                    sx={{ 
-                      textAlign: 'left', 
-                      width: '100%',
-                      cursor: 'pointer',
-                      transition: 'transform 0.2s, box-shadow 0.2s',
-                      '&:hover': {
-                        transform: 'translateY(-2px)',
-                        boxShadow: 3
-                      }
-                    }}
-                  >
-                    <CardContent>
-                      <Typography variant="subtitle2" color="text.secondary">
-                        Faltantes
-                      </Typography>
-                      <Typography variant="h4" color={totals.beverages.lowStock > 0 ? 'error' : 'primary'}>
-                        {totals.beverages.lowStock}
-                      </Typography>
-                    </CardContent>
-                  </Card>
-                </Box>
-              </Grid>
+                  <CardContent>
+                    <Typography variant="subtitle2" color="text.secondary">
+                      Faltantes
+                    </Typography>
+                    <Typography variant="h4" color={totals.beverages.lowStock > 0 ? 'error' : 'primary'}>
+                      {totals.beverages.lowStock}
+                    </Typography>
+                  </CardContent>
+                </Card>
+              </Box>
             </Grid>
           </Grid>
+        </Grid>
 
-          <Grid item xs={12} md={4}>
-            <Card variant="outlined">
-              <CardContent>
-                <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
-                  <CheckCircleIcon color="success" fontSize="small" />
-                  <Typography variant="h6">Salud del inventario</Typography>
+        <Grid item xs={12} md={4}>
+          <Card variant="outlined">
+            <CardContent>
+              <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
+                <CheckCircleIcon color="success" fontSize="small" />
+                <Typography variant="h6">Salud del inventario</Typography>
+              </Stack>
+              <Stack spacing={2}>
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <Chip size="small" color="success" label="Saludable" />
+                  <Typography variant="body2" color="text.secondary">
+                    {stockHealth.healthy} ítems ({stockHealth.ratios.healthy}%)
+                  </Typography>
                 </Stack>
-                <Stack spacing={2}>
-                  <Stack direction="row" spacing={1} alignItems="center">
-                    <Chip size="small" color="success" label="Saludable" />
-                    <Typography variant="body2" color="text.secondary">
-                      {stockHealth.healthy} ítems ({stockHealth.ratios.healthy}%)
-                    </Typography>
-                  </Stack>
-                  <LinearProgress variant="determinate" value={stockHealth.ratios.healthy} color="success" />
+                <LinearProgress variant="determinate" value={stockHealth.ratios.healthy} color="success" />
 
-                  <Stack direction="row" spacing={1} alignItems="center">
-                    <Chip size="small" color="warning" label="Atención" />
-                    <Typography variant="body2" color="text.secondary">
-                      {stockHealth.warning} ítems ({stockHealth.ratios.warning}%)
-                    </Typography>
-                  </Stack>
-                  <LinearProgress variant="determinate" value={stockHealth.ratios.warning} color="warning" />
-
-                  <Stack direction="row" spacing={1} alignItems="center">
-                    <Chip size="small" color="error" label="Crítico" />
-                    <Typography variant="body2" color="text.secondary">
-                      {stockHealth.critical} ítems ({stockHealth.ratios.critical}%)
-                    </Typography>
-                  </Stack>
-                  <LinearProgress variant="determinate" value={stockHealth.ratios.critical} color="error" />
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <Chip size="small" color="warning" label="Atención" />
+                  <Typography variant="body2" color="text.secondary">
+                    {stockHealth.warning} ítems ({stockHealth.ratios.warning}%)
+                  </Typography>
                 </Stack>
+                <LinearProgress variant="determinate" value={stockHealth.ratios.warning} color="warning" />
 
-                <Divider sx={{ my: 2 }} />
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <Chip size="small" color="error" label="Crítico" />
+                  <Typography variant="body2" color="text.secondary">
+                    {stockHealth.critical} ítems ({stockHealth.ratios.critical}%)
+                  </Typography>
+                </Stack>
+                <LinearProgress variant="determinate" value={stockHealth.ratios.critical} color="error" />
+              </Stack>
 
-                <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
-                  Ítems con stock ajustado
+              <Divider sx={{ my: 2 }} />
+
+              <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
+                Ítems con stock ajustado
+              </Typography>
+              {stockHealth.highlights.length === 0 ? (
+                <Typography variant="body2" color="text.secondary">
+                  Sin alertas por el momento.
                 </Typography>
-                {stockHealth.highlights.length === 0 ? (
-                  <Typography variant="body2" color="text.secondary">
-                    Sin alertas por el momento.
-                  </Typography>
-                ) : (
-                  <Stack spacing={1}>
-                    {stockHealth.highlights.map((item) => (
-                      <Stack key={item.id} spacing={0.5}>
-                        <Typography variant="body2" fontWeight={600}>
-                          {item.name}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          Stock {item.stock} / Punto {item.reorderPoint} {item.unit}
-                        </Typography>
-                      </Stack>
-                    ))}
-                  </Stack>
-                )}
-              </CardContent>
-            </Card>
-          </Grid>
-
-          <Grid item xs={12} md={8}>
-            <Card variant="outlined" sx={{ height: '100%' }}>
-              <CardContent sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-                <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
-                  <BarChartIcon color="primary" fontSize="small" />
-                  <Typography variant="h6">Distribución por categoría</Typography>
+              ) : (
+                <Stack spacing={1}>
+                  {stockHealth.highlights.map((item) => (
+                    <Stack key={item.id} spacing={0.5}>
+                      <Typography variant="body2" fontWeight={600}>
+                        {item.name}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        Stock {item.stock} / Punto {item.reorderPoint} {item.unit}
+                      </Typography>
+                    </Stack>
+                  ))}
                 </Stack>
-                {categoryBreakdown.total === 0 ? (
-                  <Typography variant="body2" color="text.secondary">
-                    Aún no hay inventario cargado.
-                  </Typography>
-                ) : (
+              )}
+            </CardContent>
+          </Card>
+        </Grid>
+
+        <Grid item xs={12} md={8}>
+          <Card variant="outlined" sx={{ height: '100%' }}>
+            <CardContent sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+              <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
+                <BarChartIcon color="primary" fontSize="small" />
+                <Typography variant="h6">Distribución por categoría</Typography>
+              </Stack>
+              {categoryBreakdown.total === 0 ? (
+                <Typography variant="body2" color="text.secondary">
+                  Aún no hay inventario cargado.
+                </Typography>
+              ) : (
+                <Box
+                  sx={{
+                    display: 'flex',
+                    flexDirection: { xs: 'column', sm: 'row' },
+                    gap: 3,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexGrow: 1
+                  }}
+                >
                   <Box
                     sx={{
-                      display: 'flex',
-                      flexDirection: { xs: 'column', sm: 'row' },
-                      gap: 3,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      flexGrow: 1
+                      position: 'relative',
+                      width: 220,
+                      height: 220
                     }}
                   >
-                    <Box
-                      sx={{
-                        position: 'relative',
-                        width: 220,
-                        height: 220
-                      }}
-                    >
-                      <svg viewBox="0 0 42 42" width="100%" height="100%">
+                    <svg viewBox="0 0 42 42" width="100%" height="100%">
+                      <circle
+                        cx="21"
+                        cy="21"
+                        r="15.9155"
+                        fill="transparent"
+                        stroke="var(--mui-palette-divider)"
+                        strokeWidth="3"
+                      />
+                      {categoryBreakdown.segments.reduce<{ segments: Array<{ dashArray: string; dashOffset: string; color: string }>; cumulative: number }>(
+                        (acc, segment) => {
+                          const percentage = (segment.value / categoryBreakdown.total) * 100;
+                          const dashArray = `${percentage} ${100 - percentage}`;
+                          const dashOffset = `${100 - acc.cumulative}`;
+                          acc.segments.push({ dashArray, dashOffset, color: segment.color });
+                          acc.cumulative += percentage;
+                          return acc;
+                        },
+                        { segments: [], cumulative: 0 }
+                      ).segments.map((segment, index) => (
                         <circle
+                          key={index}
                           cx="21"
                           cy="21"
                           r="15.9155"
                           fill="transparent"
-                          stroke="var(--mui-palette-divider)"
+                          stroke={segment.color}
                           strokeWidth="3"
+                          strokeDasharray={segment.dashArray}
+                          strokeDashoffset={segment.dashOffset}
+                          strokeLinecap="butt"
                         />
-                        {categoryBreakdown.segments.reduce<{ segments: Array<{ dashArray: string; dashOffset: string; color: string }>; cumulative: number }>(
-                          (acc, segment) => {
-                            const percentage = (segment.value / categoryBreakdown.total) * 100;
-                            const dashArray = `${percentage} ${100 - percentage}`;
-                            const dashOffset = `${100 - acc.cumulative}`;
-                            acc.segments.push({ dashArray, dashOffset, color: segment.color });
-                            acc.cumulative += percentage;
-                            return acc;
-                          },
-                          { segments: [], cumulative: 0 }
-                        ).segments.map((segment, index) => (
-                          <circle
-                            key={index}
-                            cx="21"
-                            cy="21"
-                            r="15.9155"
-                            fill="transparent"
-                            stroke={segment.color}
-                            strokeWidth="3"
-                            strokeDasharray={segment.dashArray}
-                            strokeDashoffset={segment.dashOffset}
-                            strokeLinecap="butt"
-                          />
-                        ))}
-                      </svg>
-                      <Stack sx={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', textAlign: 'center' }}>
-                        <Typography variant="caption" color="text.secondary">
-                          Total
-                        </Typography>
-                        <Typography variant="subtitle1" fontWeight={600}>
-                          100%
-                        </Typography>
-                      </Stack>
-                    </Box>
-                    <Stack spacing={1.5}>
-                      {categoryBreakdown.segments.map((segment) => (
-                        <Stack key={segment.key} direction="row" spacing={1} alignItems="center">
-                          <Box sx={{ width: 12, height: 12, bgcolor: segment.color, borderRadius: '50%' }} />
-                          <Typography variant="body2" sx={{ flexGrow: 1 }}>
-                            {segment.label}
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            {((segment.value / categoryBreakdown.total) * 100).toFixed(1)}%
-                          </Typography>
-                        </Stack>
                       ))}
+                    </svg>
+                    <Stack sx={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', textAlign: 'center' }}>
+                      <Typography variant="caption" color="text.secondary">
+                        Total
+                      </Typography>
+                      <Typography variant="subtitle1" fontWeight={600}>
+                        100%
+                      </Typography>
                     </Stack>
                   </Box>
-                )}
-              </CardContent>
-            </Card>
-          </Grid>
-
-          <Grid item xs={12} md={6}>
-            <Card variant="outlined">
-              <CardContent>
-                <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
-                  <WarningAmberIcon color="error" fontSize="small" />
-                  <Typography variant="h6">Prioridades de compra</Typography>
-                </Stack>
-                {lowStockItems.length === 0 ? (
-                  <Typography variant="body2" color="text.secondary">
-                    No hay ingredientes por debajo del punto de pedido.
-                  </Typography>
-                ) : (
                   <Stack spacing={1.5}>
-                    {lowStockItems.map((item) => (
-                      <Stack key={item.id ?? item.name} spacing={0.25}>
-                        <Typography variant="body2" fontWeight={600}>
-                          {item.name}
+                    {categoryBreakdown.segments.map((segment) => (
+                      <Stack key={segment.key} direction="row" spacing={1} alignItems="center">
+                        <Box sx={{ width: 12, height: 12, bgcolor: segment.color, borderRadius: '50%' }} />
+                        <Typography variant="body2" sx={{ flexGrow: 1 }}>
+                          {segment.label}
                         </Typography>
                         <Typography variant="caption" color="text.secondary">
-                          Stock actual: {item.stock} {item.unit} • Punto de pedido: {item.reorderPoint} {item.unit}
+                          {((segment.value / categoryBreakdown.total) * 100).toFixed(1)}%
                         </Typography>
                       </Stack>
                     ))}
                   </Stack>
-                )}
-              </CardContent>
-            </Card>
-          </Grid>
-
-          <Grid item xs={12} md={6}>
-            <Card variant="outlined">
-              <CardContent>
-                <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
-                  <LocalDiningIcon color="primary" fontSize="small" />
-                  <Typography variant="h6">Cobertura por categoría</Typography>
-                </Stack>
-                <Stack spacing={3}>
-                  <Stack spacing={1}>
-                    <Stack direction="row" justifyContent="space-between" alignItems="center">
-                      <Stack direction="row" spacing={1} alignItems="center">
-                        <LocalDiningIcon color="primary" fontSize="small" />
-                        <Typography variant="subtitle2">Ingredientes</Typography>
-                      </Stack>
-                      <Typography variant="caption" color="text.secondary">
-                        {totals.ingredients.total > 0
-                          ? `${((1 - totals.ingredients.lowStock / totals.ingredients.total) * 100).toFixed(1)}% saludable`
-                          : 'Sin datos'}
-                      </Typography>
-                    </Stack>
-                    <LinearProgress
-                      variant="determinate"
-                      value={
-                        totals.ingredients.total > 0
-                          ? Math.max(
-                              0,
-                              Math.min(100, ((totals.ingredients.total - totals.ingredients.lowStock) / totals.ingredients.total) * 100)
-                            )
-                          : 0
-                      }
-                      color="primary"
-                    />
-                  </Stack>
-                  <Stack spacing={1}>
-                    <Stack direction="row" justifyContent="space-between" alignItems="center">
-                      <Stack direction="row" spacing={1} alignItems="center">
-                        <LocalDrinkIcon color="secondary" fontSize="small" />
-                        <Typography variant="subtitle2">Bebidas & Café</Typography>
-                      </Stack>
-                      <Typography variant="caption" color="text.secondary">
-                        {totals.beverages.total > 0
-                          ? `${((1 - totals.beverages.lowStock / totals.beverages.total) * 100).toFixed(1)}% saludable`
-                          : 'Sin datos'}
-                      </Typography>
-                    </Stack>
-                    <LinearProgress
-                      variant="determinate"
-                      value={
-                        totals.beverages.total > 0
-                          ? Math.max(
-                              0,
-                              Math.min(100, ((totals.beverages.total - totals.beverages.lowStock) / totals.beverages.total) * 100)
-                            )
-                          : 0
-                      }
-                      color="secondary"
-                    />
-                  </Stack>
-                </Stack>
-              </CardContent>
-            </Card>
-          </Grid>
-
+                </Box>
+              )}
+            </CardContent>
+          </Card>
         </Grid>
+
+        <Grid item xs={12} md={6}>
+          <Card variant="outlined">
+            <CardContent>
+              <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
+                <WarningAmberIcon color="error" fontSize="small" />
+                <Typography variant="h6">Prioridades de compra</Typography>
+              </Stack>
+              {lowStockItems.length === 0 ? (
+                <Typography variant="body2" color="text.secondary">
+                  No hay ingredientes por debajo del punto de pedido.
+                </Typography>
+              ) : (
+                <Stack spacing={1.5}>
+                  {lowStockItems.map((item) => (
+                    <Stack key={item.id ?? item.name} spacing={0.25}>
+                      <Typography variant="body2" fontWeight={600}>
+                        {item.name}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        Stock actual: {item.stock} {item.unit} • Punto de pedido: {item.reorderPoint} {item.unit}
+                      </Typography>
+                    </Stack>
+                  ))}
+                </Stack>
+              )}
+            </CardContent>
+          </Card>
+        </Grid>
+
+        <Grid item xs={12} md={6}>
+          <Card variant="outlined">
+            <CardContent>
+              <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
+                <LocalDiningIcon color="primary" fontSize="small" />
+                <Typography variant="h6">Cobertura por categoría</Typography>
+              </Stack>
+              <Stack spacing={3}>
+                <Stack spacing={1}>
+                  <Stack direction="row" justifyContent="space-between" alignItems="center">
+                    <Stack direction="row" spacing={1} alignItems="center">
+                      <LocalDiningIcon color="primary" fontSize="small" />
+                      <Typography variant="subtitle2">Ingredientes</Typography>
+                    </Stack>
+                    <Typography variant="caption" color="text.secondary">
+                      {totals.ingredients.total > 0
+                        ? `${((1 - totals.ingredients.lowStock / totals.ingredients.total) * 100).toFixed(1)}% saludable`
+                        : 'Sin datos'}
+                    </Typography>
+                  </Stack>
+                  <LinearProgress
+                    variant="determinate"
+                    value={
+                      totals.ingredients.total > 0
+                        ? Math.max(
+                          0,
+                          Math.min(100, ((totals.ingredients.total - totals.ingredients.lowStock) / totals.ingredients.total) * 100)
+                        )
+                        : 0
+                    }
+                    color="primary"
+                  />
+                </Stack>
+                <Stack spacing={1}>
+                  <Stack direction="row" justifyContent="space-between" alignItems="center">
+                    <Stack direction="row" spacing={1} alignItems="center">
+                      <LocalDrinkIcon color="secondary" fontSize="small" />
+                      <Typography variant="subtitle2">Bebidas & Café</Typography>
+                    </Stack>
+                    <Typography variant="caption" color="text.secondary">
+                      {totals.beverages.total > 0
+                        ? `${((1 - totals.beverages.lowStock / totals.beverages.total) * 100).toFixed(1)}% saludable`
+                        : 'Sin datos'}
+                    </Typography>
+                  </Stack>
+                  <LinearProgress
+                    variant="determinate"
+                    value={
+                      totals.beverages.total > 0
+                        ? Math.max(
+                          0,
+                          Math.min(100, ((totals.beverages.total - totals.beverages.lowStock) / totals.beverages.total) * 100)
+                        )
+                        : 0
+                    }
+                    color="secondary"
+                  />
+                </Stack>
+              </Stack>
+            </CardContent>
+          </Card>
+        </Grid>
+
+      </Grid>
     </Box>
   );
 };

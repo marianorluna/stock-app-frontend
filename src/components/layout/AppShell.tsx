@@ -30,6 +30,9 @@ import StoreIcon from '@mui/icons-material/Store';
 import MenuIcon from '@mui/icons-material/Menu';
 import AccountCircleIcon from '@mui/icons-material/AccountCircle';
 import LogoutIcon from '@mui/icons-material/Logout';
+import InventoryIcon from '@mui/icons-material/Inventory';
+import ShoppingCartIcon from '@mui/icons-material/ShoppingCart';
+import PointOfSaleIcon from '@mui/icons-material/PointOfSale';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useTheme } from '@mui/material/styles';
 import { useAuth } from '../../contexts/AuthContext';
@@ -46,10 +49,6 @@ const getNavLinks = (hasPermission: (resource: string, action: string) => boolea
   
   if (hasPermission('dashboard', 'read')) {
     links.push({ label: 'Dashboard', icon: <DashboardIcon fontSize="small" />, to: '/dashboard' });
-  }
-  
-  if (hasPermission('inventory', 'read')) {
-    links.push({ label: 'Inventario', icon: <BarChartIcon fontSize="small" />, to: '/inventory' });
   }
   
   return links;
@@ -74,7 +73,7 @@ const AppShell = ({ children }: AppShellProps) => {
   const location = useLocation();
   const theme = useTheme();
   const navigate = useNavigate();
-  const { user, logout, hasPermission } = useAuth();
+  const { user, logout, hasPermission, hasAnyRole } = useAuth();
   const isMobile = useMediaQuery(theme.breakpoints.down('lg'));
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [userMenuAnchor, setUserMenuAnchor] = useState<null | HTMLElement>(null);
@@ -85,6 +84,7 @@ const AppShell = ({ children }: AppShellProps) => {
   
   const navLinks = getNavLinks(hasPermission);
   const trailingLinks = getTrailingLinks(hasPermission);
+  const canAccessInventory = hasAnyRole(['admin', 'manager']);
 
   const handleOpenUserMenu = (event: React.MouseEvent<HTMLElement>) => {
     setUserMenuAnchor(event.currentTarget);
@@ -156,11 +156,50 @@ const AppShell = ({ children }: AppShellProps) => {
                 <Box sx={{ width: 250 }} role="presentation" onClick={toggleDrawer(false)} onKeyDown={toggleDrawer(false)}>
                   <List>
                     {navLinks.map((link) => (
-                      <ListItemButton component={Link} to={link.to} key={link.to} selected={location.pathname === link.to}>
+                      <ListItemButton
+                        component={Link}
+                        to={link.to}
+                        key={link.to}
+                        selected={location.pathname === link.to}
+                      >
                         <ListItemIcon>{link.icon}</ListItemIcon>
                         <ListItemText primary={link.label} />
                       </ListItemButton>
                     ))}
+                    {canAccessInventory && (
+                      <>
+                        <ListItemButton 
+                          component={Link}
+                          to="/inventory"
+                          selected={location.pathname === '/inventory' || location.pathname.startsWith('/inventory/')}
+                        >
+                          <ListItemIcon>
+                            <BarChartIcon fontSize="small" />
+                          </ListItemIcon>
+                          <ListItemText primary="Inventario" />
+                        </ListItemButton>
+                        <List component="div" disablePadding sx={{ pl: 4 }}>
+                          <ListItemButton component={Link} to="/inventory/stock" selected={location.pathname === '/inventory/stock'}>
+                            <ListItemIcon sx={{ minWidth: 32 }}>
+                              <InventoryIcon fontSize="small" />
+                            </ListItemIcon>
+                            <ListItemText primary="Stock Actual" />
+                          </ListItemButton>
+                          <ListItemButton component={Link} to="/inventory/purchases" selected={location.pathname === '/inventory/purchases'}>
+                            <ListItemIcon sx={{ minWidth: 32 }}>
+                              <ShoppingCartIcon fontSize="small" />
+                            </ListItemIcon>
+                            <ListItemText primary="Compras" />
+                          </ListItemButton>
+                          <ListItemButton component={Link} to="/inventory/sales" selected={location.pathname === '/inventory/sales'}>
+                            <ListItemIcon sx={{ minWidth: 32 }}>
+                              <PointOfSaleIcon fontSize="small" />
+                            </ListItemIcon>
+                            <ListItemText primary="Ventas" />
+                          </ListItemButton>
+                        </List>
+                      </>
+                    )}
                     <RequirePermission resource="ingredients" action="read" hide>
                       <ListItemButton 
                         component={Link}
@@ -222,6 +261,16 @@ const AppShell = ({ children }: AppShellProps) => {
                   {link.label}
                 </Button>
               ))}
+              {canAccessInventory && (
+                <Button
+                  component={Link}
+                  to="/inventory"
+                  startIcon={<BarChartIcon fontSize="small" />}
+                  variant={location.pathname === '/inventory' || location.pathname.startsWith('/inventory/') ? 'contained' : 'text'}
+                >
+                  Inventario
+                </Button>
+              )}
               <RequirePermission resource="ingredients" action="read" hide>
                 <Button
                   component={Link}

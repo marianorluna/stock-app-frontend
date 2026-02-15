@@ -5,6 +5,9 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ProtectedRoute } from './components/auth/ProtectedRoute';
 import DashboardPage from './pages/DashboardPage';
 import InventoryPage from './pages/InventoryPage';
+import StockActualPage from './pages/inventory/StockActualPage';
+import PurchasesPage from './pages/inventory/PurchasesPage';
+import SalesPage from './pages/inventory/SalesPage';
 import ProductsPage from './pages/ProductsPage';
 import IngredientsPage from './pages/IngredientsPage';
 import RecipesPage from './pages/RecipesPage';
@@ -13,13 +16,14 @@ import ManualEntryPage from './pages/ManualEntryPage';
 import SuppliersPage from './pages/SuppliersPage';
 import LoginPage from './pages/LoginPage';
 import UnauthorizedPage from './pages/UnauthorizedPage';
+import NotFoundPage from './pages/NotFoundPage';
 import { useInventoryStore } from './hooks/useInventoryStore';
 import socketClient from './services/socketClient';
 import AppShell from './components/layout/AppShell';
 
 //componente interno que maneja las rutas protegidas
 const AppRoutes = () => {
-  const { user, hasPermission, hasRole } = useAuth();
+  const { user, hasPermission, hasRole, hasAnyRole } = useAuth();
   const { fetchSnapshot, registerSocketListeners } = useInventoryStore();
 
   //inicializa el snapshot del inventario y registra listeners de websocket cuando el usuario está autenticado
@@ -36,7 +40,20 @@ const AppRoutes = () => {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
-      <Route path="/unauthorized" element={<UnauthorizedPage />} />
+      <Route
+        path="/unauthorized"
+        element={
+          <ProtectedRoute>
+            <AppShell>
+              <Box component="main" sx={{ flex: 1, py: 1 }}>
+                <Container maxWidth="lg" sx={{ py: 0 }}>
+                  <UnauthorizedPage />
+                </Container>
+              </Box>
+            </AppShell>
+          </ProtectedRoute>
+        }
+      />
       
       <Route
         path="/"
@@ -49,7 +66,9 @@ const AppRoutes = () => {
                     <Navigate to="/manual" replace />
                   ) : hasPermission('dashboard', 'read') ? (
                     <Navigate to="/dashboard" replace />
-                  ) : hasPermission('inventory', 'read') || hasPermission('ingredients', 'read') ? (
+                  ) : hasAnyRole(['admin', 'manager']) ? (
+                    <Navigate to="/inventory" replace />
+                  ) : hasPermission('ingredients', 'read') ? (
                     <Navigate to="/products" replace />
                   ) : (
                     <Navigate to="/unauthorized" replace />
@@ -79,11 +98,53 @@ const AppRoutes = () => {
       <Route
         path="/inventory"
         element={
-          <ProtectedRoute requiredPermission={{ resource: 'inventory', action: 'read' }}>
+          <ProtectedRoute requiredRoles={['admin', 'manager']}>
             <AppShell>
               <Box component="main" sx={{ flex: 1, py: 1 }}>
                 <Container maxWidth="lg" sx={{ py: 0 }}>
                   <InventoryPage />
+                </Container>
+              </Box>
+            </AppShell>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/inventory/stock"
+        element={
+          <ProtectedRoute requiredRoles={['admin', 'manager']}>
+            <AppShell>
+              <Box component="main" sx={{ flex: 1, py: 1 }}>
+                <Container maxWidth="lg" sx={{ py: 0 }}>
+                  <StockActualPage />
+                </Container>
+              </Box>
+            </AppShell>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/inventory/purchases"
+        element={
+          <ProtectedRoute requiredRoles={['admin', 'manager']}>
+            <AppShell>
+              <Box component="main" sx={{ flex: 1, py: 1 }}>
+                <Container maxWidth="lg" sx={{ py: 0 }}>
+                  <PurchasesPage />
+                </Container>
+              </Box>
+            </AppShell>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/inventory/sales"
+        element={
+          <ProtectedRoute requiredRoles={['admin', 'manager']}>
+            <AppShell>
+              <Box component="main" sx={{ flex: 1, py: 1 }}>
+                <Container maxWidth="lg" sx={{ py: 0 }}>
+                  <SalesPage />
                 </Container>
               </Box>
             </AppShell>
@@ -174,6 +235,22 @@ const AppRoutes = () => {
               <Box component="main" sx={{ flex: 1, py: 1 }}>
                 <Container maxWidth="lg" sx={{ py: 0 }}>
                   <ManualEntryPage />
+                </Container>
+              </Box>
+            </AppShell>
+          </ProtectedRoute>
+        }
+      />
+      
+      {/* Ruta catch-all para páginas no encontradas (404) */}
+      <Route
+        path="*"
+        element={
+          <ProtectedRoute>
+            <AppShell>
+              <Box component="main" sx={{ flex: 1, py: 1 }}>
+                <Container maxWidth="lg" sx={{ py: 0 }}>
+                  <NotFoundPage />
                 </Container>
               </Box>
             </AppShell>

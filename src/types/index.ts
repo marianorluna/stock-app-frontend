@@ -97,6 +97,14 @@ export type WastagePreset = {
 export type Supplier = {
   sku: string;
   name: string;
+  nif?: string;
+  address?: string;
+  city?: string;
+  zip?: string;
+  country?: string;
+  tel?: string;
+  contact?: string;
+  email?: string;
   totalPurchases: number;
   lastPurchase: string | null;
 };

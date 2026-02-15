@@ -49,7 +49,17 @@ const SuppliersPage = () => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogMode, setDialogMode] = useState<'edit' | 'duplicate'>('edit');
   const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(null);
-  const [formValue, setFormValue] = useState('');
+  const [formValues, setFormValues] = useState({
+    name: '',
+    nif: '',
+    address: '',
+    city: '',
+    zip: '',
+    country: '',
+    tel: '',
+    contact: '',
+    email: ''
+  });
   const [duplicateTargetSku, setDuplicateTargetSku] = useState<string>('');
   const [processing, setProcessing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<Supplier | null>(null);
@@ -80,7 +90,17 @@ const SuppliersPage = () => {
   const handleEdit = (supplier: Supplier) => {
     setSelectedSupplier(supplier);
     setDialogMode('edit');
-    setFormValue(supplier.name);
+    setFormValues({
+      name: supplier.name || '',
+      nif: supplier.nif || '',
+      address: supplier.address || '',
+      city: supplier.city || '',
+      zip: supplier.zip || '',
+      country: supplier.country || '',
+      tel: supplier.tel || '',
+      contact: supplier.contact || '',
+      email: supplier.email || ''
+    });
     setDuplicateTargetSku('');
     setDialogOpen(true);
   };
@@ -88,7 +108,17 @@ const SuppliersPage = () => {
   const handleDuplicate = (supplier: Supplier) => {
     setSelectedSupplier(supplier);
     setDialogMode('duplicate');
-    setFormValue('');
+    setFormValues({
+      name: '',
+      nif: '',
+      address: '',
+      city: '',
+      zip: '',
+      country: '',
+      tel: '',
+      contact: '',
+      email: ''
+    });
     setDuplicateTargetSku('');
     setDialogOpen(true);
   };
@@ -107,7 +137,17 @@ const SuppliersPage = () => {
   const handleDialogClose = () => {
     setDialogOpen(false);
     setSelectedSupplier(null);
-    setFormValue('');
+    setFormValues({
+      name: '',
+      nif: '',
+      address: '',
+      city: '',
+      zip: '',
+      country: '',
+      tel: '',
+      contact: '',
+      email: ''
+    });
     setDuplicateTargetSku('');
     setProcessing(false);
   };
@@ -118,9 +158,19 @@ const SuppliersPage = () => {
     const encodedSku = encodeURIComponent(selectedSupplier.sku);
 
     if (dialogMode === 'edit') {
-      const trimmed = formValue.trim();
-      if (!trimmed) return;
-      await apiClient.put(`/suppliers/${encodedSku}`, { newName: trimmed });
+      const trimmedName = formValues.name.trim();
+      if (!trimmedName) return;
+      await apiClient.put(`/suppliers/${encodedSku}`, {
+        name: trimmedName,
+        nif: formValues.nif,
+        address: formValues.address,
+        city: formValues.city,
+        zip: formValues.zip,
+        country: formValues.country,
+        tel: formValues.tel,
+        contact: formValues.contact,
+        email: formValues.email
+      });
     } else {
       if (!duplicateTargetSku.trim()) return;
       await apiClient.post(`/suppliers/${encodedSku}/duplicate`, { newSku: duplicateTargetSku.trim() });
@@ -222,18 +272,80 @@ const SuppliersPage = () => {
         </Grid>
       ))}
 
-      <Dialog open={dialogOpen} onClose={handleDialogClose} fullWidth maxWidth="xs">
+      <Dialog open={dialogOpen} onClose={handleDialogClose} fullWidth maxWidth="sm">
         <DialogTitle>{dialogMode === 'edit' ? 'Editar proveedor' : 'Duplicar compras a proveedor'}</DialogTitle>
         <DialogContent>
           {dialogMode === 'edit' ? (
-            <TextField
-              autoFocus
-              margin="dense"
-              label="Nombre del proveedor"
-              fullWidth
-              value={formValue}
-              onChange={(event) => setFormValue(event.target.value)}
-            />
+            <Stack spacing={2} sx={{ mt: 1 }}>
+              <TextField
+                autoFocus
+                margin="dense"
+                label="Nombre del proveedor *"
+                fullWidth
+                required
+                value={formValues.name}
+                onChange={(event) => setFormValues({ ...formValues, name: event.target.value })}
+              />
+              <TextField
+                margin="dense"
+                label="NIF"
+                fullWidth
+                value={formValues.nif}
+                onChange={(event) => setFormValues({ ...formValues, nif: event.target.value })}
+              />
+              <TextField
+                margin="dense"
+                label="Dirección"
+                fullWidth
+                value={formValues.address}
+                onChange={(event) => setFormValues({ ...formValues, address: event.target.value })}
+              />
+              <Stack direction="row" spacing={2}>
+                <TextField
+                  margin="dense"
+                  label="Ciudad"
+                  fullWidth
+                  value={formValues.city}
+                  onChange={(event) => setFormValues({ ...formValues, city: event.target.value })}
+                />
+                <TextField
+                  margin="dense"
+                  label="Código Postal"
+                  fullWidth
+                  value={formValues.zip}
+                  onChange={(event) => setFormValues({ ...formValues, zip: event.target.value })}
+                />
+              </Stack>
+              <TextField
+                margin="dense"
+                label="País"
+                fullWidth
+                value={formValues.country}
+                onChange={(event) => setFormValues({ ...formValues, country: event.target.value })}
+              />
+              <TextField
+                margin="dense"
+                label="Teléfono"
+                fullWidth
+                value={formValues.tel}
+                onChange={(event) => setFormValues({ ...formValues, tel: event.target.value })}
+              />
+              <TextField
+                margin="dense"
+                label="Contacto"
+                fullWidth
+                value={formValues.contact}
+                onChange={(event) => setFormValues({ ...formValues, contact: event.target.value })}
+              />
+              <TextField
+                margin="dense"
+                label="Email"
+                fullWidth
+                type="email"
+                value={formValues.email}
+                onChange={(event) => setFormValues({ ...formValues, email: event.target.value })}
+              />
+            </Stack>
           ) : (
             <>
               <FormControl fullWidth margin="dense">
@@ -273,7 +385,7 @@ const SuppliersPage = () => {
             disabled={
               processing ||
               (dialogMode === 'edit'
-                ? !formValue.trim()
+                ? !formValues.name.trim()
                 : !duplicateTargetSku.trim() || duplicateTargetOptions.length === 0)
             }
           >
