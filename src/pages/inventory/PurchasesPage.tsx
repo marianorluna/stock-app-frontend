@@ -368,7 +368,8 @@ const PurchasesPage = () => {
                 }
               }}
               onClick={handleUpdatePdfs}
-              disabled={processingPdfs}
+              //disabled={processingPdfs}
+              disabled={true}
               startIcon={processingPdfs ? <CircularProgress size={20} /> : null}
             >
               {processingPdfs ? 'Procesando...' : 'Actualizar'}
@@ -418,7 +419,8 @@ const PurchasesPage = () => {
             variant="contained"
             fullWidth
             onClick={() => fileInputRef.current?.click()}
-            disabled={uploading}
+            //disabled={uploading}
+            disabled={true}
             startIcon={uploading ? <CircularProgress size={20} /> : <UploadFileIcon />}
             sx={{ flex: 1 }}
             style={{ marginLeft: '0' }}
@@ -433,6 +435,7 @@ const PurchasesPage = () => {
             }}
             startIcon={<PictureAsPdfIcon />}
             sx={{ flex: 1 }}
+            disabled={true}
           >
             Factura PDF
           </Button>
