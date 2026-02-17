@@ -20,7 +20,8 @@ import {
   Dialog,
   DialogTitle,
   DialogContent,
-  DialogActions
+  DialogActions,
+  Alert
 } from '@mui/material';
 import { useCallback, useEffect, useMemo, useState, ChangeEvent, type JSX } from 'react';
 import { useTheme } from '@mui/material/styles';
@@ -47,6 +48,7 @@ type ManualTabConfig = {
 
 const ManualEntryPage = () => {
   const { hasPermission } = useAuth();
+  const canDeleteWastage = hasPermission('manual', 'delete');
   const [open, setOpen] = useState(false);
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -286,18 +288,21 @@ const ManualEntryPage = () => {
                         {String(note)}
                       </Typography>
                     )}
-                    <RequirePermission resource="manual" action="delete" hide>
+                    <Stack direction="row" spacing={1.5} sx={{ mt: 2 }}>
                       <Button
                         size="small"
                         color="error"
                         startIcon={<DeleteOutlineIcon fontSize="small" />}
-                        sx={{ mt: 1.5 }}
-                        onClick={() => setWastageToDelete(wastage)}
-                        disabled={deleteButtonDisabled}
+                        onClick={() => {
+                          if (canDeleteWastage) {
+                            setWastageToDelete(wastage);
+                          }
+                        }}
+                        disabled={deleteButtonDisabled || !canDeleteWastage}
                       >
                         Eliminar
                       </Button>
-                    </RequirePermission>
+                    </Stack>
                     {index !== wastageLog.length - 1 && <Divider sx={{ mt: 2 }} />}
                   </Box>
                 );
@@ -381,12 +386,30 @@ const ManualEntryPage = () => {
         <Box key={`${activeForm}-${activeInnerTab}`}>{renderInnerContent}</Box>
       </Box>
       <Snackbar open={open} autoHideDuration={3000} onClose={handleClose} message="Operación registrada" />
-      <Dialog open={Boolean(wastageToDelete)} onClose={() => setWastageToDelete(null)} maxWidth="xs" fullWidth>
+      <Dialog open={Boolean(wastageToDelete)} onClose={() => setWastageToDelete(null)} maxWidth="sm" fullWidth>
         <DialogTitle>Confirmar eliminación</DialogTitle>
         <DialogContent>
+          <Alert severity="warning" sx={{ mb: 2 }}>
+            Esta acción es irreversible. Se revertirán los cambios en el inventario.
+          </Alert>
           <Typography>
             ¿Deseas eliminar la merma registrada el {wastageToDelete ? formatDateTime(wastageToDelete.timestamp) : ''}?
           </Typography>
+          {wastageToDelete && wastageToDelete.items.length > 0 && (
+            <Box sx={{ mt: 2 }}>
+              <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                Items de la merma:
+              </Typography>
+              <Stack spacing={0.5}>
+                {wastageToDelete.items.map((item, itemIndex) => (
+                  <Typography key={itemIndex} variant="body2">
+                    • {getIngredientName(item.ingredient)} • {item.quantityInGrams} g
+                    {item.reason ? ` • ${item.reason}` : ''}
+                  </Typography>
+                ))}
+              </Stack>
+            </Box>
+          )}
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setWastageToDelete(null)}>Cancelar</Button>

@@ -31,8 +31,22 @@ type ManualWastageFormValues = {
 };
 
 const defaultValues: ManualWastageFormValues = {
-  items: [{ ingredient: '', quantity: 0, unit: 'grams', reason: '' }]
+  items: [{ ingredient: '', quantity: 0, unit: '', reason: '' }]
 };
+
+const WASTAGE_REASONS = [
+  'Podrido',
+  'Vencido',
+  'Rotura de envase',
+  'Derrame',
+  'Contaminación',
+  'Daño por manipulación',
+  'Pérdida en almacén',
+  'Error en preparación',
+  'Calidad deficiente',
+  'Exceso de producción',
+  'Otros'
+];
 
 const ManualWastageForm = ({ onSubmitted }: Props) => {
   const {
@@ -56,6 +70,7 @@ const ManualWastageForm = ({ onSubmitted }: Props) => {
   const [confirmPreset, setConfirmPreset] = useState<WastagePreset | null>(null);
   const [confirmLoading, setConfirmLoading] = useState(false);
   const [presetCreationLoading, setPresetCreationLoading] = useState(false);
+  const [showOtherReason, setShowOtherReason] = useState<{ [key: number]: boolean }>({});
   const {
     control,
     handleSubmit,
@@ -70,6 +85,22 @@ const ManualWastageForm = ({ onSubmitted }: Props) => {
     name: 'items'
   });
   const watchedItems = useWatch({ control, name: 'items' }) ?? [];
+
+  // Validar que todos los items estén completos
+  const isFormValid = useMemo(() => {
+    if (!watchedItems || watchedItems.length === 0) return false;
+    return watchedItems.every(
+      (item) =>
+        item.ingredient &&
+        item.ingredient.trim() !== '' &&
+        item.unit &&
+        item.unit.trim() !== '' &&
+        item.quantity &&
+        Number(item.quantity) > 0 &&
+        item.reason &&
+        item.reason.trim() !== ''
+    );
+  }, [watchedItems]);
 
   useEffect(() => {
     void fetchIngredients();
@@ -119,6 +150,7 @@ const ManualWastageForm = ({ onSubmitted }: Props) => {
 
     await createWastage({ items });
     reset(defaultValues);
+    setShowOtherReason({});
     onSubmitted?.();
   });
 
@@ -251,42 +283,15 @@ const ManualWastageForm = ({ onSubmitted }: Props) => {
                     value={ingredientOptions.find((option) => option.value === ingredientField.value) ?? null}
                     onChange={(_, value) => ingredientField.onChange(value?.value ?? '')}
                     isOptionEqualToValue={(option, value) => option.value === value.value}
-                    renderInput={(params) => <TextField {...params} label="Ingrediente" required />}
-                  />
-                )}
-              />
-              <Controller
-                control={control}
-                name={`items.${index}.quantity`}
-                rules={{ required: true, min: 1 }}
-                render={({ field }) => (
-                  <TextField
-                    label={`Cantidad (${(() => {
-                      const selectedIngredientId = watchedItems?.[index]?.ingredient;
-                      const selectedIngredient = ingredients.find((candidate) => candidate._id === selectedIngredientId);
-                      const unitValue = watchedItems?.[index]?.unit ?? 'grams';
-                      if (!selectedIngredient) return 'g';
-                      if (unitValue === 'product') {
-                        return selectedIngredient.productUnit ?? selectedIngredient.purchaseUnit ?? 'u';
-                      }
-                      if (unitValue === 'purchase') {
-                        return selectedIngredient.purchaseUnit ?? 'u';
-                      }
-                      if (unitValue === 'unit') {
-                        return 'unidades';
-                      }
-                      return 'g';
-                    })()})`}
-                    type="number"
-                    value={field.value}
-                    onFocus={(event) => event.target.select()}
-                    onChange={(event) => {
-                      const rawValue = event.target.value;
-                      const normalizedValue = rawValue.replace(/^0+(?=\d)/, '');
-                      event.target.value = normalizedValue;
-                      field.onChange(normalizedValue === '' ? 0 : Number(normalizedValue));
-                    }}
-                    required
+                    renderInput={(params) => (
+                      <TextField
+                        {...params}
+                        label="Ingrediente"
+                        required
+                        placeholder="Selecciona un producto"
+                        InputLabelProps={{ shrink: true }}
+                      />
+                    )}
                   />
                 )}
               />
@@ -336,12 +341,29 @@ const ManualWastageForm = ({ onSubmitted }: Props) => {
                         ]
                       : [])
                   ];
-                  const fallback = unitOptions.find((option) => !option.disabled)?.value ?? 'grams';
-                  if (!unitOptions.some((option) => option.value === unitField.value && !option.disabled)) {
-                    unitField.onChange(fallback);
-                  }
                   return (
-                    <TextField select label="Unidad" sx={{ minWidth: 120 }} value={unitField.value} onChange={unitField.onChange}>
+                    <TextField
+                      select
+                      label="Unidad"
+                      sx={{ minWidth: 120 }}
+                      value={unitField.value || ''}
+                      onChange={unitField.onChange}
+                      required
+                      InputLabelProps={{ shrink: true }}
+                      SelectProps={{
+                        displayEmpty: true,
+                        renderValue: (selected) => {
+                          if (!selected || selected === '') {
+                            return <span style={{ color: '#9e9e9e' }}>Selecciona la unidad</span>;
+                          }
+                          const selectedOption = unitOptions.find(opt => opt.value === selected);
+                          return selectedOption?.label || selected;
+                        }
+                      }}
+                    >
+                      <MenuItem value="" disabled>
+                        Selecciona la unidad
+                      </MenuItem>
                       {unitOptions.map((option) => (
                         <MenuItem key={option.value} value={option.value} disabled={option.disabled}>
                           {option.label}
@@ -353,15 +375,108 @@ const ManualWastageForm = ({ onSubmitted }: Props) => {
               />
               <Controller
                 control={control}
-                name={`items.${index}.reason`}
-                render={({ field }) => <TextField label="Razón" {...field} />}
+                name={`items.${index}.quantity`}
+                rules={{ required: true, min: 1 }}
+                render={({ field }) => (
+                  <TextField
+                    label={`Cantidad (${(() => {
+                      const selectedIngredientId = watchedItems?.[index]?.ingredient;
+                      const selectedIngredient = ingredients.find((candidate) => candidate._id === selectedIngredientId);
+                      const unitValue = watchedItems?.[index]?.unit ?? 'grams';
+                      if (!selectedIngredient) return 'g';
+                      if (unitValue === 'product') {
+                        return selectedIngredient.productUnit ?? selectedIngredient.purchaseUnit ?? 'u';
+                      }
+                      if (unitValue === 'purchase') {
+                        return selectedIngredient.purchaseUnit ?? 'u';
+                      }
+                      if (unitValue === 'unit') {
+                        return 'unidades';
+                      }
+                      return 'g';
+                    })()})`}
+                    type="number"
+                    value={field.value}
+                    onFocus={(event) => event.target.select()}
+                    onChange={(event) => {
+                      const rawValue = event.target.value;
+                      const normalizedValue = rawValue.replace(/^0+(?=\d)/, '');
+                      event.target.value = normalizedValue;
+                      field.onChange(normalizedValue === '' ? 0 : Number(normalizedValue));
+                    }}
+                    required
+                    sx={{ minWidth: 240 }}
+                  />
+                )}
               />
-              <Button onClick={() => remove(index)} color="error">
-                Eliminar
-              </Button>
+              <Controller
+                control={control}
+                name={`items.${index}.reason`}
+                rules={{ required: true }}
+                render={({ field }) => {
+                  const currentValue = field.value || '';
+                  // Si el valor no está en la lista de opciones predefinidas y no está vacío, es un valor personalizado
+                  const isCustomValue = currentValue !== '' && !WASTAGE_REASONS.includes(currentValue);
+                  const shouldShowOther = showOtherReason[index] || isCustomValue;
+                  
+                  return (
+                    <>
+                      <TextField
+                        select
+                        label="Motivo"
+                        required
+                        sx={{ minWidth: 240 }}
+                        InputLabelProps={{ shrink: true }}
+                        value={shouldShowOther ? 'Otros' : currentValue}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          if (value === 'Otros') {
+                            setShowOtherReason(prev => ({ ...prev, [index]: true }));
+                            // Si ya había un valor personalizado, mantenerlo; si no, limpiar
+                            if (!isCustomValue) {
+                              field.onChange('');
+                            }
+                          } else {
+                            setShowOtherReason(prev => ({ ...prev, [index]: false }));
+                            field.onChange(value);
+                          }
+                        }}
+                        SelectProps={{
+                          displayEmpty: true,
+                          renderValue: (selected) => {
+                            if (!selected || selected === '') {
+                              return <span style={{ color: '#9e9e9e' }}>Selecciona un motivo</span>;
+                            }
+                            return selected;
+                          }
+                        }}
+                      >
+                        <MenuItem value="" disabled>
+                          Selecciona un motivo
+                        </MenuItem>
+                        {WASTAGE_REASONS.map((reason) => (
+                          <MenuItem key={reason} value={reason}>
+                            {reason}
+                          </MenuItem>
+                        ))}
+                      </TextField>
+                      {shouldShowOther && (
+                        <TextField
+                          label="Especificar motivo"
+                          value={currentValue}
+                          onChange={(e) => field.onChange(e.target.value)}
+                          required
+                          placeholder="Añadir motivo de la merma"
+                          sx={{ minWidth: 240 }}
+                          InputLabelProps={{ shrink: true }}
+                        />
+                      )}
+                    </>
+                  );
+                }}
+              />
             </Stack>
           ))}
-          <Button onClick={() => append({ ingredient: '', quantity: 0, unit: 'grams', reason: '' })}>Agregar merma</Button>
           <Button
             variant="outlined"
             color="secondary"
@@ -375,7 +490,7 @@ const ManualWastageForm = ({ onSubmitted }: Props) => {
           >
             Crear botón rápido con esta merma
           </Button>
-          <Button type="submit" variant="contained" disabled={isSubmitting}>
+          <Button type="submit" variant="contained" disabled={isSubmitting || !isFormValid}>
             Registrar merma
           </Button>
         </Stack>

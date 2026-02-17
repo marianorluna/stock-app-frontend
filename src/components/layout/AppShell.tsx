@@ -1,4 +1,4 @@
-import { ReactNode, useState } from 'react';
+import { ReactNode, useState, useEffect, useCallback } from 'react';
 import {
   AppBar,
   Box,
@@ -18,7 +18,9 @@ import {
   Avatar,
   Chip,
   Divider,
-  CircularProgress
+  CircularProgress,
+  Collapse,
+  Badge
 } from '@mui/material';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import BarChartIcon from '@mui/icons-material/BarChart';
@@ -33,11 +35,15 @@ import LogoutIcon from '@mui/icons-material/Logout';
 import InventoryIcon from '@mui/icons-material/Inventory';
 import ShoppingCartIcon from '@mui/icons-material/ShoppingCart';
 import PointOfSaleIcon from '@mui/icons-material/PointOfSale';
+import NotificationsIcon from '@mui/icons-material/Notifications';
+import ExpandLess from '@mui/icons-material/ExpandLess';
+import ExpandMore from '@mui/icons-material/ExpandMore';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useTheme } from '@mui/material/styles';
 import { useAuth } from '../../contexts/AuthContext';
 import { RequirePermission } from '../auth/RequirePermission';
 import { useInventoryStore } from '../../hooks/useInventoryStore';
+import apiClient from '../../services/apiClient';
 
 type AppShellProps = {
   children: ReactNode;
@@ -77,14 +83,52 @@ const AppShell = ({ children }: AppShellProps) => {
   const isMobile = useMediaQuery(theme.breakpoints.down('lg'));
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [userMenuAnchor, setUserMenuAnchor] = useState<null | HTMLElement>(null);
+  const [inventoryMenuOpen, setInventoryMenuOpen] = useState(false);
+  const [productsMenuOpen, setProductsMenuOpen] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
   const { loading, loadingMessage } = useInventoryStore((state) => ({
     loading: state.loading,
     loadingMessage: state.loadingMessage
   }));
   
+  const canAccessInventory = hasAnyRole(['admin', 'manager']);
+
+  // Obtener contador de notificaciones no leídas
+  const fetchUnreadCount = useCallback(async () => {
+    if (!canAccessInventory) return;
+    
+    try {
+      const { data } = await apiClient.get<{ unreadCount: number }>('/notifications/unread-count');
+      setUnreadCount(data.unreadCount);
+    } catch (error) {
+      console.error('Error obteniendo contador de notificaciones:', error);
+    }
+  }, [canAccessInventory]);
+
+  // Actualizar contador cuando cambia la ruta o cada 30 segundos
+  useEffect(() => {
+    if (user && canAccessInventory) {
+      fetchUnreadCount();
+      const interval = setInterval(fetchUnreadCount, 30000); // Actualizar cada 30 segundos
+      return () => clearInterval(interval);
+    }
+  }, [user, canAccessInventory, fetchUnreadCount, location.pathname]);
+
+  // Marcar todas como leídas al entrar a la página de notificaciones
+  useEffect(() => {
+    if (location.pathname === '/notifications' && canAccessInventory && unreadCount > 0) {
+      apiClient.patch('/notifications/read-all')
+        .then(() => {
+          setUnreadCount(0);
+        })
+        .catch((error) => {
+          console.error('Error marcando notificaciones como leídas:', error);
+        });
+    }
+  }, [location.pathname, canAccessInventory, unreadCount]);
+  
   const navLinks = getNavLinks(hasPermission);
   const trailingLinks = getTrailingLinks(hasPermission);
-  const canAccessInventory = hasAnyRole(['admin', 'manager']);
 
   const handleOpenUserMenu = (event: React.MouseEvent<HTMLElement>) => {
     setUserMenuAnchor(event.currentTarget);
@@ -127,9 +171,19 @@ const AppShell = ({ children }: AppShellProps) => {
                 color={user.role === 'admin' ? 'error' : user.role === 'manager' ? 'warning' : 'default'}
               />
               <IconButton onClick={handleOpenUserMenu} size="small">
-                <Avatar sx={{ width: 32, height: 32, bgcolor: 'primary.main' }}>
-                  {user.name.charAt(0).toUpperCase()}
-                </Avatar>
+                <Badge 
+                  badgeContent={canAccessInventory ? unreadCount : 0} 
+                  color="error" 
+                  max={99}
+                  anchorOrigin={{
+                    vertical: 'bottom',
+                    horizontal: 'left'
+                  }}
+                >
+                  <Avatar sx={{ width: 32, height: 32, bgcolor: 'primary.main' }}>
+                    {user.name.charAt(0).toUpperCase()}
+                  </Avatar>
+                </Badge>
               </IconButton>
               <Menu anchorEl={userMenuAnchor} open={Boolean(userMenuAnchor)} onClose={handleCloseUserMenu}>
                 <MenuItem disabled>
@@ -138,6 +192,23 @@ const AppShell = ({ children }: AppShellProps) => {
                   </ListItemIcon>
                   <ListItemText primary={user.name} secondary={user.email} />
                 </MenuItem>
+                {canAccessInventory && (
+                  <MenuItem 
+                    component={Link}
+                    to="/notifications"
+                    onClick={() => {
+                      handleCloseUserMenu();
+                      fetchUnreadCount();
+                    }}
+                  >
+                    <ListItemIcon>
+                      <Badge badgeContent={unreadCount} color="error" max={99}>
+                        <NotificationsIcon fontSize="small" />
+                      </Badge>
+                    </ListItemIcon>
+                    <ListItemText primary="Notificaciones" />
+                  </MenuItem>
+                )}
                 <MenuItem onClick={handleLogout}>
                   <ListItemIcon>
                     <LogoutIcon fontSize="small" />
@@ -153,7 +224,7 @@ const AppShell = ({ children }: AppShellProps) => {
                 <MenuIcon />
               </IconButton>
               <Drawer anchor="right" open={drawerOpen} onClose={toggleDrawer(false)}>
-                <Box sx={{ width: 250 }} role="presentation" onClick={toggleDrawer(false)} onKeyDown={toggleDrawer(false)}>
+                <Box sx={{ width: 250 }} role="presentation" onKeyDown={toggleDrawer(false)}>
                   <List>
                     {navLinks.map((link) => (
                       <ListItemButton
@@ -161,6 +232,7 @@ const AppShell = ({ children }: AppShellProps) => {
                         to={link.to}
                         key={link.to}
                         selected={location.pathname === link.to}
+                        onClick={toggleDrawer(false)}
                       >
                         <ListItemIcon>{link.icon}</ListItemIcon>
                         <ListItemText primary={link.label} />
@@ -168,82 +240,132 @@ const AppShell = ({ children }: AppShellProps) => {
                     ))}
                     {canAccessInventory && (
                       <>
-                        <ListItemButton 
-                          component={Link}
-                          to="/inventory"
-                          selected={location.pathname === '/inventory' || location.pathname.startsWith('/inventory/')}
-                        >
-                          <ListItemIcon>
-                            <BarChartIcon fontSize="small" />
-                          </ListItemIcon>
-                          <ListItemText primary="Inventario" />
-                        </ListItemButton>
-                        <List component="div" disablePadding sx={{ pl: 4 }}>
-                          <ListItemButton component={Link} to="/inventory/stock" selected={location.pathname === '/inventory/stock'}>
-                            <ListItemIcon sx={{ minWidth: 32 }}>
-                              <InventoryIcon fontSize="small" />
+                        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                          <ListItemButton 
+                            component={Link}
+                            to="/inventory"
+                            selected={location.pathname === '/inventory' || location.pathname.startsWith('/inventory/')}
+                            onClick={toggleDrawer(false)}
+                            sx={{ flex: 1 }}
+                          >
+                            <ListItemIcon>
+                              <BarChartIcon fontSize="small" />
                             </ListItemIcon>
-                            <ListItemText primary="Stock Actual" />
+                            <ListItemText primary="Inventario" />
                           </ListItemButton>
-                          <ListItemButton component={Link} to="/inventory/purchases" selected={location.pathname === '/inventory/purchases'}>
-                            <ListItemIcon sx={{ minWidth: 32 }}>
-                              <ShoppingCartIcon fontSize="small" />
-                            </ListItemIcon>
-                            <ListItemText primary="Compras" />
-                          </ListItemButton>
-                          <ListItemButton component={Link} to="/inventory/sales" selected={location.pathname === '/inventory/sales'}>
-                            <ListItemIcon sx={{ minWidth: 32 }}>
-                              <PointOfSaleIcon fontSize="small" />
-                            </ListItemIcon>
-                            <ListItemText primary="Ventas" />
-                          </ListItemButton>
-                        </List>
+                          <IconButton
+                            size="small"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setInventoryMenuOpen(!inventoryMenuOpen);
+                            }}
+                            sx={{ mr: 1 }}
+                          >
+                            {inventoryMenuOpen ? <ExpandLess /> : <ExpandMore />}
+                          </IconButton>
+                        </Box>
+                        <Collapse in={inventoryMenuOpen} timeout="auto" unmountOnExit>
+                          <List component="div" disablePadding sx={{ pl: 4 }}>
+                            <ListItemButton component={Link} to="/inventory/stock" selected={location.pathname === '/inventory/stock'} onClick={toggleDrawer(false)}>
+                              <ListItemIcon sx={{ minWidth: 32 }}>
+                                <InventoryIcon fontSize="small" />
+                              </ListItemIcon>
+                              <ListItemText primary="Stock Actual" />
+                            </ListItemButton>
+                            <ListItemButton component={Link} to="/inventory/purchases" selected={location.pathname === '/inventory/purchases'} onClick={toggleDrawer(false)}>
+                              <ListItemIcon sx={{ minWidth: 32 }}>
+                                <ShoppingCartIcon fontSize="small" />
+                              </ListItemIcon>
+                              <ListItemText primary="Compras" />
+                            </ListItemButton>
+                            <ListItemButton component={Link} to="/inventory/sales" selected={location.pathname === '/inventory/sales'} onClick={toggleDrawer(false)}>
+                              <ListItemIcon sx={{ minWidth: 32 }}>
+                                <PointOfSaleIcon fontSize="small" />
+                              </ListItemIcon>
+                              <ListItemText primary="Ventas" />
+                            </ListItemButton>
+                          </List>
+                        </Collapse>
                       </>
                     )}
                     <RequirePermission resource="ingredients" action="read" hide>
-                      <ListItemButton 
-                        component={Link}
-                        to="/products"
-                        selected={location.pathname === '/products' || location.pathname.startsWith('/ingredients') || location.pathname.startsWith('/recipes') || location.pathname.startsWith('/drinks')}
-                      >
-                        <ListItemIcon>
-                          <KitchenIcon fontSize="small" />
-                        </ListItemIcon>
-                        <ListItemText primary="Productos" />
-                      </ListItemButton>
-                      <List component="div" disablePadding sx={{ pl: 4 }}>
-                        <RequirePermission resource="ingredients" action="read" hide>
-                          <ListItemButton component={Link} to="/ingredients" selected={location.pathname === '/ingredients'}>
-                            <ListItemIcon sx={{ minWidth: 32 }}>
-                              <KitchenIcon fontSize="small" />
-                            </ListItemIcon>
-                            <ListItemText primary="Ingredientes" />
-                          </ListItemButton>
-                        </RequirePermission>
-                        <RequirePermission resource="recipes" action="read" hide>
-                          <ListItemButton component={Link} to="/recipes" selected={location.pathname === '/recipes'}>
-                            <ListItemIcon sx={{ minWidth: 32 }}>
-                              <ReceiptLongIcon fontSize="small" />
-                            </ListItemIcon>
-                            <ListItemText primary="Recetas" />
-                          </ListItemButton>
-                        </RequirePermission>
-                        <RequirePermission resource="recipes" action="read" hide>
-                          <ListItemButton component={Link} to="/drinks" selected={location.pathname === '/drinks'}>
-                            <ListItemIcon sx={{ minWidth: 32 }}>
-                              <LocalCafeIcon fontSize="small" />
-                            </ListItemIcon>
-                            <ListItemText primary="Bebidas y café" />
-                          </ListItemButton>
-                        </RequirePermission>
-                      </List>
+                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                        <ListItemButton 
+                          component={Link}
+                          to="/products"
+                          selected={location.pathname === '/products' || location.pathname.startsWith('/ingredients') || location.pathname.startsWith('/recipes') || location.pathname.startsWith('/drinks')}
+                          onClick={toggleDrawer(false)}
+                          sx={{ flex: 1 }}
+                        >
+                          <ListItemIcon>
+                            <KitchenIcon fontSize="small" />
+                          </ListItemIcon>
+                          <ListItemText primary="Productos" />
+                        </ListItemButton>
+                        <IconButton
+                          size="small"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setProductsMenuOpen(!productsMenuOpen);
+                          }}
+                          sx={{ mr: 1 }}
+                        >
+                          {productsMenuOpen ? <ExpandLess /> : <ExpandMore />}
+                        </IconButton>
+                      </Box>
+                      <Collapse in={productsMenuOpen} timeout="auto" unmountOnExit>
+                        <List component="div" disablePadding sx={{ pl: 4 }}>
+                          <RequirePermission resource="ingredients" action="read" hide>
+                            <ListItemButton component={Link} to="/ingredients" selected={location.pathname === '/ingredients'} onClick={toggleDrawer(false)}>
+                              <ListItemIcon sx={{ minWidth: 32 }}>
+                                <KitchenIcon fontSize="small" />
+                              </ListItemIcon>
+                              <ListItemText primary="Ingredientes" />
+                            </ListItemButton>
+                          </RequirePermission>
+                          <RequirePermission resource="recipes" action="read" hide>
+                            <ListItemButton component={Link} to="/recipes" selected={location.pathname === '/recipes'} onClick={toggleDrawer(false)}>
+                              <ListItemIcon sx={{ minWidth: 32 }}>
+                                <ReceiptLongIcon fontSize="small" />
+                              </ListItemIcon>
+                              <ListItemText primary="Recetas" />
+                            </ListItemButton>
+                          </RequirePermission>
+                          <RequirePermission resource="recipes" action="read" hide>
+                            <ListItemButton component={Link} to="/drinks" selected={location.pathname === '/drinks'} onClick={toggleDrawer(false)}>
+                              <ListItemIcon sx={{ minWidth: 32 }}>
+                                <LocalCafeIcon fontSize="small" />
+                              </ListItemIcon>
+                              <ListItemText primary="Bebidas y café" />
+                            </ListItemButton>
+                          </RequirePermission>
+                        </List>
+                      </Collapse>
                     </RequirePermission>
                     {trailingLinks.map((link) => (
-                      <ListItemButton component={Link} to={link.to} key={link.to} selected={location.pathname === link.to}>
+                      <ListItemButton component={Link} to={link.to} key={link.to} selected={location.pathname === link.to} onClick={toggleDrawer(false)}>
                         <ListItemIcon>{link.icon}</ListItemIcon>
                         <ListItemText primary={link.label} />
                       </ListItemButton>
                     ))}
+                    {canAccessInventory && (
+                      <ListItemButton 
+                        component={Link}
+                        to="/notifications"
+                        selected={location.pathname === '/notifications'}
+                        onClick={() => {
+                          toggleDrawer(false)();
+                          fetchUnreadCount();
+                        }}
+                      >
+                        <ListItemIcon>
+                          <Badge badgeContent={unreadCount} color="error" max={99}>
+                            <NotificationsIcon fontSize="small" />
+                          </Badge>
+                        </ListItemIcon>
+                        <ListItemText primary="Notificaciones" />
+                      </ListItemButton>
+                    )}
                   </List>
                 </Box>
               </Drawer>
@@ -299,6 +421,21 @@ const AppShell = ({ children }: AppShellProps) => {
                   {link.label}
                 </Button>
               ))}
+              {canAccessInventory && (
+                <IconButton
+                  component={Link}
+                  to="/notifications"
+                  color={location.pathname === '/notifications' ? 'primary' : 'default'}
+                  onClick={() => {
+                    // Actualizar contador al hacer clic
+                    fetchUnreadCount();
+                  }}
+                >
+                  <Badge badgeContent={unreadCount} color="error" max={99}>
+                    <NotificationsIcon />
+                  </Badge>
+                </IconButton>
+              )}
               {user && (
                 <>
                   <Divider orientation="vertical" flexItem sx={{ mx: 1, height: 24 }} />
@@ -309,9 +446,19 @@ const AppShell = ({ children }: AppShellProps) => {
                       color={user.role === 'admin' ? 'error' : user.role === 'manager' ? 'warning' : 'default'}
                     />
                     <IconButton onClick={handleOpenUserMenu} size="small">
-                      <Avatar sx={{ width: 32, height: 32, bgcolor: 'primary.main' }}>
-                        {user.name.charAt(0).toUpperCase()}
-                      </Avatar>
+                      <Badge 
+                        badgeContent={canAccessInventory ? unreadCount : 0} 
+                        color="error" 
+                        max={99}
+                        anchorOrigin={{
+                          vertical: 'bottom',
+                          horizontal: 'left'
+                        }}
+                      >
+                        <Avatar sx={{ width: 32, height: 32, bgcolor: 'primary.main' }}>
+                          {user.name.charAt(0).toUpperCase()}
+                        </Avatar>
+                      </Badge>
                     </IconButton>
                     <Menu anchorEl={userMenuAnchor} open={Boolean(userMenuAnchor)} onClose={handleCloseUserMenu}>
                       <MenuItem disabled>
@@ -320,6 +467,23 @@ const AppShell = ({ children }: AppShellProps) => {
                         </ListItemIcon>
                         <ListItemText primary={user.name} secondary={user.email} />
                       </MenuItem>
+                      {canAccessInventory && (
+                        <MenuItem 
+                          component={Link}
+                          to="/notifications"
+                          onClick={() => {
+                            handleCloseUserMenu();
+                            fetchUnreadCount();
+                          }}
+                        >
+                          <ListItemIcon>
+                            <Badge badgeContent={unreadCount} color="error" max={99}>
+                              <NotificationsIcon fontSize="small" />
+                            </Badge>
+                          </ListItemIcon>
+                          <ListItemText primary="Notificaciones" />
+                        </MenuItem>
+                      )}
                       <MenuItem onClick={handleLogout}>
                         <ListItemIcon>
                           <LogoutIcon fontSize="small" />

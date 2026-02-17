@@ -2,7 +2,9 @@ import { useEffect } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { Box, Container } from '@mui/material';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { NotificationProvider } from './contexts/NotificationContext';
 import { ProtectedRoute } from './components/auth/ProtectedRoute';
+import { registerServiceWorker } from './utils/registerServiceWorker';
 import DashboardPage from './pages/DashboardPage';
 import InventoryPage from './pages/InventoryPage';
 import StockActualPage from './pages/inventory/StockActualPage';
@@ -14,6 +16,7 @@ import RecipesPage from './pages/RecipesPage';
 import DrinksPage from './pages/DrinksPage';
 import ManualEntryPage from './pages/ManualEntryPage';
 import SuppliersPage from './pages/SuppliersPage';
+import NotificationsPage from './pages/NotificationsPage';
 import LoginPage from './pages/LoginPage';
 import UnauthorizedPage from './pages/UnauthorizedPage';
 import NotFoundPage from './pages/NotFoundPage';
@@ -198,6 +201,21 @@ const AppRoutes = () => {
       />
       
       <Route
+        path="/notifications"
+        element={
+          <ProtectedRoute requiredRoles={['admin', 'manager']}>
+            <AppShell>
+              <Box component="main" sx={{ flex: 1, py: 1 }}>
+                <Container maxWidth="lg" sx={{ py: 0 }}>
+                  <NotificationsPage />
+                </Container>
+              </Box>
+            </AppShell>
+          </ProtectedRoute>
+        }
+      />
+      
+      <Route
         path="/recipes"
         element={
           <ProtectedRoute requiredPermission={{ resource: 'recipes', action: 'read' }}>
@@ -263,9 +281,16 @@ const AppRoutes = () => {
 
 //componente principal que envuelve la app con el AuthProvider
 const App = () => {
+  // Registrar service worker al cargar la app
+  useEffect(() => {
+    registerServiceWorker();
+  }, []);
+
   return (
     <AuthProvider>
-      <AppRoutes />
+      <NotificationProvider>
+        <AppRoutes />
+      </NotificationProvider>
     </AuthProvider>
   );
 };
