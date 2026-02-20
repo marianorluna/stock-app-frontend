@@ -38,6 +38,7 @@ import PointOfSaleIcon from '@mui/icons-material/PointOfSale';
 import NotificationsIcon from '@mui/icons-material/Notifications';
 import ExpandLess from '@mui/icons-material/ExpandLess';
 import ExpandMore from '@mui/icons-material/ExpandMore';
+import SettingsIcon from '@mui/icons-material/Settings';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useTheme } from '@mui/material/styles';
 import { useAuth } from '../../contexts/AuthContext';
@@ -366,6 +367,19 @@ const AppShell = ({ children }: AppShellProps) => {
                         <ListItemText primary="Notificaciones" />
                       </ListItemButton>
                     )}
+                    {hasPermission('config', 'read') && (
+                      <ListItemButton 
+                        component={Link}
+                        to="/configuraciones"
+                        selected={location.pathname === '/configuraciones' || location.pathname.startsWith('/configuraciones/')}
+                        onClick={toggleDrawer(false)}
+                      >
+                        <ListItemIcon>
+                          <SettingsIcon fontSize="small" />
+                        </ListItemIcon>
+                        <ListItemText primary="Configuraciones" />
+                      </ListItemButton>
+                    )}
                   </List>
                 </Box>
               </Drawer>
@@ -435,6 +449,16 @@ const AppShell = ({ children }: AppShellProps) => {
                     <NotificationsIcon />
                   </Badge>
                 </IconButton>
+              )}
+              {hasPermission('config', 'read') && (
+                <Button
+                  component={Link}
+                  to="/configuraciones"
+                  startIcon={<SettingsIcon fontSize="small" />}
+                  variant={location.pathname === '/configuraciones' || location.pathname.startsWith('/configuraciones/') ? 'contained' : 'text'}
+                >
+                  Configuraciones
+                </Button>
               )}
               {user && (
                 <>
