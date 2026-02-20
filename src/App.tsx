@@ -17,6 +17,8 @@ import DrinksPage from './pages/DrinksPage';
 import ManualEntryPage from './pages/ManualEntryPage';
 import SuppliersPage from './pages/SuppliersPage';
 import NotificationsPage from './pages/NotificationsPage';
+import ConfiguracionesPage from './pages/ConfiguracionesPage';
+import ActualizarBearerPage from './pages/configuraciones/ActualizarBearerPage';
 import LoginPage from './pages/LoginPage';
 import UnauthorizedPage from './pages/UnauthorizedPage';
 import NotFoundPage from './pages/NotFoundPage';
@@ -208,6 +210,36 @@ const AppRoutes = () => {
               <Box component="main" sx={{ flex: 1, py: 1 }}>
                 <Container maxWidth="lg" sx={{ py: 0 }}>
                   <NotificationsPage />
+                </Container>
+              </Box>
+            </AppShell>
+          </ProtectedRoute>
+        }
+      />
+      
+      <Route
+        path="/configuraciones"
+        element={
+          <ProtectedRoute requiredPermission={{ resource: 'config', action: 'read' }}>
+            <AppShell>
+              <Box component="main" sx={{ flex: 1, py: 1 }}>
+                <Container maxWidth="lg" sx={{ py: 0 }}>
+                  <ConfiguracionesPage />
+                </Container>
+              </Box>
+            </AppShell>
+          </ProtectedRoute>
+        }
+      />
+      
+      <Route
+        path="/configuraciones/bearer"
+        element={
+          <ProtectedRoute requiredPermission={{ resource: 'config', action: 'read' }}>
+            <AppShell>
+              <Box component="main" sx={{ flex: 1, py: 1 }}>
+                <Container maxWidth="lg" sx={{ py: 0 }}>
+                  <ActualizarBearerPage />
                 </Container>
               </Box>
             </AppShell>
