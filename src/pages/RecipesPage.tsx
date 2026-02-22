@@ -91,9 +91,9 @@ const RecipesPage = () => {
     const recipe =
       dish.recipe && dish.recipe.length > 0
         ? dish.recipe.map((item) => ({
-            ingredient: typeof item.ingredient === 'string' ? item.ingredient : item.ingredient?._id ?? '',
-            quantityInGrams: item.quantityInGrams ?? 0
-          }))
+          ingredient: typeof item.ingredient === 'string' ? item.ingredient : item.ingredient?._id ?? '',
+          quantityInGrams: item.quantityInGrams ?? 0
+        }))
         : [{ ingredient: '', quantityInGrams: 0 }];
     return {
       name: dish.name,
@@ -171,8 +171,8 @@ const RecipesPage = () => {
     dialogMode === 'edit'
       ? 'Editar receta'
       : dialogMode === 'duplicate'
-      ? 'Duplicar receta'
-      : 'Nueva receta';
+        ? 'Duplicar receta'
+        : 'Nueva receta';
 
   return (
     <Grid container spacing={3} sx={{ py: 0 }}>
@@ -293,13 +293,13 @@ const RecipesPage = () => {
                     name={`recipe.${index}.ingredient`}
                     rules={{ required: true }}
                     render={({ field: ingredientField }) => (
-                  <Autocomplete
+                      <Autocomplete
                         sx={{ minWidth: 220 }}
                         options={ingredientOptions}
                         getOptionLabel={(option) => option.label}
-                    value={ingredientOptions.find((option) => option.value === ingredientField.value) ?? null}
-                    onChange={(_, value) => ingredientField.onChange(value?.value ?? '')}
-                    isOptionEqualToValue={(option, value) => option.value === value.value}
+                        value={ingredientOptions.find((option) => option.value === ingredientField.value) ?? null}
+                        onChange={(_, value) => ingredientField.onChange(value?.value ?? '')}
+                        isOptionEqualToValue={(option, value) => option.value === value.value}
                         renderInput={(params) => <TextField {...params} label="Ingrediente" />}
                       />
                     )}
@@ -308,14 +308,14 @@ const RecipesPage = () => {
                     control={control}
                     name={`recipe.${index}.quantityInGrams`}
                     rules={{ required: true, min: 1 }}
-                render={({ field }) => (
-                  <TextField
-                    label="Cantidad (g)"
-                    type="number"
-                    value={field.value}
-                    onChange={(event) => field.onChange(Number(event.target.value))}
-                  />
-                )}
+                    render={({ field }) => (
+                      <TextField
+                        label="Cantidad (g)"
+                        type="number"
+                        value={field.value}
+                        onChange={(event) => field.onChange(Number(event.target.value))}
+                      />
+                    )}
                   />
                   <Button color="error" onClick={() => remove(index)}>
                     Eliminar
