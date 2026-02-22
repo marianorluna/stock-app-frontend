@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
+  Autocomplete,
   Button,
   Card,
   CardContent,
+  Chip,
   Dialog,
   DialogActions,
   DialogContent,
@@ -15,7 +17,7 @@ import {
   MenuItem,
   InputAdornment
 } from '@mui/material';
-import { useForm } from 'react-hook-form';
+import { useForm, Controller } from 'react-hook-form';
 import { useInventoryStore } from '../hooks/useInventoryStore';
 import apiClient from '../services/apiClient';
 import type { Ingredient } from '../types';
@@ -35,7 +37,7 @@ type IngredientFormValues = {
   conversionFactor: number;
   conversionUnit: 'u' | 'g' | 'ml';
   reorderPoint: number;
-  category: 'bebida' | 'cafe' | 'condimentos' | 'frutas' | 'cereales' | 'lacteos' | 'otros' | 'proteinas' | 'vegetales';
+  category: 'bebida' | 'cafe' | 'condimentos' | 'frutas' | 'cereales' | 'lacteos' | 'otros' | 'proteinas' | 'vegetales' | 'aceites' | 'frutos secos' | 'gases' | 'dulces';
   allergens: string[];
   codeArticlePurchase: string;
 };
@@ -70,8 +72,12 @@ const IngredientsPage = () => {
     register,
     handleSubmit,
     reset,
+    control,
     formState: { isSubmitting }
   } = useForm<IngredientFormValues>({ defaultValues });
+
+  // Alérgenos comunes basados en los datos existentes
+  const commonAllergens = ['huevo', 'lacteos', 'gluten', 'frutos secos', 'pescado'];
 
   useEffect(() => {
     void fetchIngredients();
@@ -80,7 +86,7 @@ const IngredientsPage = () => {
   const filteredIngredients = useMemo(() => {
     const normalizedTerm = searchTerm.trim().toLowerCase();
     // Filtrar categorías que tradicionalmente eran "ingredient"
-    const ingredientCategories = ['condimentos', 'frutas', 'cereales', 'lacteos', 'otros', 'proteinas', 'vegetales'];
+    const ingredientCategories = ['condimentos', 'frutas', 'cereales', 'lacteos', 'otros', 'proteinas', 'vegetales', 'aceites', 'frutos secos', 'gases', 'dulces', 'cafe'];
     return ingredients
       .filter((ingredient) => ingredientCategories.includes(ingredient.category))
       .filter((ingredient) => ingredient.name.toLowerCase().includes(normalizedTerm));
@@ -197,11 +203,16 @@ const IngredientsPage = () => {
           }}
         />
       </Grid>
+      <Grid item xs={12}>
+        <Typography variant="body2" color="text.secondary">
+          Mostrando {filteredIngredients.length} {filteredIngredients.length === 1 ? 'ingrediente' : 'ingredientes'}
+        </Typography>
+      </Grid>
       {filteredIngredients.map((ingredient) => (
         <Grid item xs={12} md={6} key={ingredient._id}>
           <Card variant="outlined">
             <CardContent>
-              <Typography variant="h6">{ingredient.name}</Typography>
+              <Typography variant="h6">{ingredient.description ?? ingredient.name}</Typography>
               <Typography variant="body2" color="text.secondary">
                 Categoría: Ingrediente
               </Typography>
@@ -278,7 +289,43 @@ const IngredientsPage = () => {
               <MenuItem value="otros">Otros</MenuItem>
               <MenuItem value="proteinas">Proteínas</MenuItem>
               <MenuItem value="vegetales">Vegetales</MenuItem>
+              <MenuItem value="aceites">Aceites</MenuItem>
+              <MenuItem value="frutos secos">Frutos secos</MenuItem>
+              <MenuItem value="gases">Gases</MenuItem>
+              <MenuItem value="dulces">Dulces</MenuItem>
             </TextField>
+            <Controller
+              control={control}
+              name="allergens"
+              render={({ field: { onChange, value } }) => (
+                <Autocomplete
+                  multiple
+                  freeSolo
+                  options={commonAllergens}
+                  value={value || []}
+                  onChange={(_, newValue) => {
+                    onChange(newValue);
+                  }}
+                  renderTags={(value, getTagProps) =>
+                    value.map((option, index) => (
+                      <Chip
+                        variant="outlined"
+                        label={option}
+                        {...getTagProps({ index })}
+                        key={index}
+                      />
+                    ))
+                  }
+                  renderInput={(params) => (
+                    <TextField
+                      {...params}
+                      label="Alérgenos"
+                      placeholder="Seleccionar o escribir alérgenos"
+                    />
+                  )}
+                />
+              )}
+            />
             <TextField label="Código artículo compra" {...register('codeArticlePurchase')} />
           </Stack>
         </DialogContent>

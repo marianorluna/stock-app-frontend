@@ -303,7 +303,7 @@ const ManualWastageForm = ({ onSubmitted }: Props) => {
                   const selectedIngredient = ingredients.find((candidate) => candidate._id === selectedIngredientId);
                   const category = selectedIngredient?.category ?? 'otros';
                   // Categorías que tradicionalmente usan gramos
-                  const bulkCategories = ['condimentos', 'frutas', 'cereales', 'lacteos', 'otros', 'proteinas', 'vegetales'];
+                  const bulkCategories = ['condimentos', 'frutas', 'cereales', 'lacteos', 'otros', 'proteinas', 'vegetales', 'aceites', 'frutos secos', 'dulces'];
                   const isBulkCategory = category && bulkCategories.includes(category);
                   const isCoffeeCategory = category === 'cafe';
                   const productUnit = selectedIngredient?.stockUnit ?? selectedIngredient?.productUnit?.trim();

@@ -37,15 +37,23 @@ const DashboardPage = () => {
       };
     }
 
-    const ingredientTotals = snapshot.categoryTotals?.ingredient ?? { total: 0, lowStock: 0 };
-    const beverageTotals = snapshot.categoryTotals?.beverage ?? { total: 0, lowStock: 0 };
-    const coffeeTotals = snapshot.categoryTotals?.coffee ?? { total: 0, lowStock: 0 };
+    // Usar las mismas categorías que IngredientsPage.tsx para contar ingredientes
+    const ingredientCategories = ['condimentos', 'frutas', 'cereales', 'lacteos', 'otros', 'proteinas', 'vegetales', 'aceites', 'frutos secos', 'gases', 'dulces', 'cafe'];
+    const ingredientItems = snapshot.inventory?.filter(item => ingredientCategories.includes(item.category)) ?? [];
+    const ingredientLowStock = ingredientItems.filter(item => item.stock <= item.reorderPoint).length;
+
+    // Usar la misma lógica que DrinksPage.tsx para contar bebidas (solo categoría 'bebida', sin 'cafe')
+    const beverageItems = snapshot.inventory?.filter(item => item.category === 'bebida') ?? [];
+    const beverageLowStock = beverageItems.filter(item => item.stock <= item.reorderPoint).length;
 
     return {
-      ingredients: ingredientTotals,
+      ingredients: {
+        total: ingredientItems.length,
+        lowStock: ingredientLowStock
+      },
       beverages: {
-        total: beverageTotals.total + coffeeTotals.total,
-        lowStock: beverageTotals.lowStock + coffeeTotals.lowStock
+        total: beverageItems.length,
+        lowStock: beverageLowStock
       }
     };
   }, [snapshot]);
@@ -79,7 +87,11 @@ const DashboardPage = () => {
       'lacteos': 'ingredient',
       'otros': 'ingredient',
       'proteinas': 'ingredient',
-      'vegetales': 'ingredient'
+      'vegetales': 'ingredient',
+      'aceites': 'ingredient',
+      'frutos secos': 'ingredient',
+      'gases': 'ingredient',
+      'dulces': 'ingredient'
     };
 
     // Agregar categorías mapeadas
@@ -254,7 +266,7 @@ const DashboardPage = () => {
                 >
                   <CardContent>
                     <Typography variant="subtitle2" color="text.secondary">
-                      Bebidas & Café
+                      Bebidas
                     </Typography>
                     <Typography variant="h4">{totals.beverages.total}</Typography>
                   </CardContent>
