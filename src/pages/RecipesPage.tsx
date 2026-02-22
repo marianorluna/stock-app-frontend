@@ -80,10 +80,12 @@ const RecipesPage = () => {
 
   const ingredientOptions = useMemo(
     () =>
-      ingredients.map((ingredient) => ({
-        label: ingredient.name,
-        value: ingredient._id
-      })),
+      ingredients
+        .filter((ingredient) => ingredient.category !== 'bebida')
+        .map((ingredient) => ({
+          label: ingredient.description ?? ingredient.name,
+          value: ingredient._id
+        })),
     [ingredients]
   );
 
@@ -222,14 +224,14 @@ const RecipesPage = () => {
                   const ingredientRef = item.ingredient;
                   const ingredientId =
                     typeof ingredientRef === 'string' ? ingredientRef : ingredientRef?._id ?? '';
-                  const ingredientName =
-                    typeof ingredientRef === 'object' && ingredientRef !== null
-                      ? ingredientRef.name
-                      : ingredients.find((ingredient) => ingredient._id === ingredientId)?.name ?? ingredientId;
+                  const ingredient = typeof ingredientRef === 'object' && ingredientRef !== null
+                    ? ingredientRef
+                    : ingredients.find((ingredient) => ingredient._id === ingredientId);
+                  const ingredientDisplay = ingredient?.description ?? ingredient?.name ?? ingredientId;
 
                   return (
                     <Typography key={`${dish._id}-${ingredientId}`} variant="body2">
-                      {ingredientName} • {item.quantityInGrams} g
+                      {ingredientDisplay} • {item.quantityInGrams} g
                     </Typography>
                   );
                 })}

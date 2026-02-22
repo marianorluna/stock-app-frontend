@@ -337,7 +337,7 @@ const AppShell = ({ children }: AppShellProps) => {
                               <ListItemIcon sx={{ minWidth: 32 }}>
                                 <LocalCafeIcon fontSize="small" />
                               </ListItemIcon>
-                              <ListItemText primary="Bebidas y café" />
+                              <ListItemText primary="Bebidas" />
                             </ListItemButton>
                           </RequirePermission>
                         </List>
