@@ -35,6 +35,7 @@ const defaultValues: ManualWastageFormValues = {
 };
 
 const WASTAGE_REASONS = [
+  'Ajuste de inventario',
   'Podrido',
   'Vencido',
   'Rotura de envase',
@@ -66,7 +67,14 @@ const ManualWastageForm = ({ onSubmitted }: Props) => {
     createWastagePreset: state.createWastagePreset,
     deleteWastagePreset: state.deleteWastagePreset
   }));
-  const ingredientOptions = ingredients.map((ingredient) => ({ label: ingredient.name, value: ingredient._id }));
+  const ingredientOptions = useMemo(
+    () =>
+      ingredients.map((ingredient) => ({
+        label: ingredient.description?.trim() || ingredient.name,
+        value: ingredient._id
+      })),
+    [ingredients]
+  );
   const [confirmPreset, setConfirmPreset] = useState<WastagePreset | null>(null);
   const [confirmLoading, setConfirmLoading] = useState(false);
   const [presetCreationLoading, setPresetCreationLoading] = useState(false);
@@ -170,10 +178,10 @@ const ManualWastageForm = ({ onSubmitted }: Props) => {
       item.unit === 'product'
         ? productUnitLabel
         : item.unit === 'purchase'
-        ? ingredient.purchaseUnit ?? productUnitLabel
-        : item.unit === 'unit'
-        ? 'unidades'
-        : 'g';
+          ? ingredient.purchaseUnit ?? productUnitLabel
+          : item.unit === 'unit'
+            ? 'unidades'
+            : 'g';
     const name = `${ingredient.name} (${item.quantity} ${unitLabel}${item.reason ? ` • ${item.reason}` : ''})`;
 
     const payload: WastagePresetPayload = {
@@ -324,21 +332,21 @@ const ManualWastageForm = ({ onSubmitted }: Props) => {
                     },
                     ...(meaningfulProductUnit
                       ? [
-                          {
-                            value: 'product',
-                            label: productUnit,
-                            disabled: false
-                          }
-                        ]
+                        {
+                          value: 'product',
+                          label: productUnit,
+                          disabled: false
+                        }
+                      ]
                       : []),
                     ...(purchaseUnit
                       ? [
-                          {
-                            value: 'purchase',
-                            label: purchaseUnit,
-                            disabled: false
-                          }
-                        ]
+                        {
+                          value: 'purchase',
+                          label: purchaseUnit,
+                          disabled: false
+                        }
+                      ]
                       : [])
                   ];
                   return (
@@ -418,7 +426,7 @@ const ManualWastageForm = ({ onSubmitted }: Props) => {
                   // Si el valor no está en la lista de opciones predefinidas y no está vacío, es un valor personalizado
                   const isCustomValue = currentValue !== '' && !WASTAGE_REASONS.includes(currentValue);
                   const shouldShowOther = showOtherReason[index] || isCustomValue;
-                  
+
                   return (
                     <>
                       <TextField
