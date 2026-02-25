@@ -8,6 +8,7 @@ import type {
   ManualPurchasePayload,
   ManualWastagePayload,
   Ingredient,
+  Beverage,
   Dish,
   SaleRecord,
   PurchaseRecord,
@@ -21,6 +22,7 @@ import type {
 type InventoryState = {
   snapshot?: StockSnapshot;
   ingredients: Ingredient[];
+  beverages: Beverage[];
   dishes: Dish[];
   suppliers: Supplier[];
   loading: boolean;
@@ -34,6 +36,7 @@ type InventoryState = {
   wastagePresets: WastagePreset[];
   fetchSnapshot: () => Promise<void>;
   fetchIngredients: () => Promise<void>;
+  fetchBeverages: () => Promise<void>;
   fetchDishes: () => Promise<void>;
   fetchSuppliers: () => Promise<void>;
   createSale: (payload: ManualSalePayload) => Promise<void>;
@@ -54,6 +57,7 @@ export const useInventoryStore = create<InventoryState>()(
   devtools((set, get) => ({
     snapshot: undefined,
     ingredients: [],
+    beverages: [],
     dishes: [],
     suppliers: [],
     loading: false,
@@ -121,6 +125,15 @@ export const useInventoryStore = create<InventoryState>()(
         set({ ingredients: data });
       } catch {
         set({ error: 'Error cargando ingredientes' });
+      }
+    },
+    //obtiene la lista de bebidas desde la api
+    fetchBeverages: async () => {
+      try {
+        const { data } = await apiClient.get<Beverage[]>('/beverages');
+        set({ beverages: data });
+      } catch {
+        set({ error: 'Error cargando bebidas' });
       }
     },
     //obtiene la lista de platos/recetas desde la api

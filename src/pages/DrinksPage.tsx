@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Autocomplete,
+  Box,
   Button,
   Card,
   CardContent,
@@ -17,57 +18,140 @@ import {
   TextField,
   Typography
 } from '@mui/material';
-import { useForm, Controller } from 'react-hook-form';
+import { useForm, Controller, useWatch } from 'react-hook-form';
 import { useInventoryStore } from '../hooks/useInventoryStore';
 import apiClient from '../services/apiClient';
-import { useAuth } from '../contexts/AuthContext';
 import { RequirePermission } from '../components/auth/RequirePermission';
 import SearchIcon from '@mui/icons-material/Search';
-import type { Ingredient } from '../types';
+import type { Beverage } from '../types';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import TagIcon from '@mui/icons-material/Tag';
 
-type DrinkFormValues = {
+// Mapeo categoryName → elemento SKU (según SKU_ELEMENTS.md, sección Bebidas)
+const CATEGORY_ELEMENT_MAP: Record<string, string> = {
+  'Bebidas':         'BD',
+  'Copa de vino':    'CV',
+  'Bebida premium':  'BP',
+  'Botella':         'BT'
+};
+
+const BEVERAGE_CATEGORIES = Object.keys(CATEGORY_ELEMENT_MAP);
+
+// Genera un código de 3 letras a partir del nombre
+const nameToCode = (name: string): string => {
+  const cleaned = name.replace(/[^a-zA-Z]/g, '').toUpperCase();
+  return cleaned.substring(0, 3).padEnd(3, 'X');
+};
+
+// Genera un SKU único y correlativo para una bebida
+const generateBeverageSku = (
+  categoryName: string,
+  name: string,
+  existingSkus: string[]
+): string => {
+  const element = CATEGORY_ELEMENT_MAP[categoryName];
+  if (!element || !name.trim()) return '';
+
+  const prefix = `B${element}`;
+
+  // Extraer números existentes para este elemento (formato: B[EL][4 dígitos][3 letras])
+  const existingNumbers = existingSkus
+    .filter((sku) => sku.startsWith(prefix) && sku.length === 10)
+    .map((sku) => parseInt(sku.substring(3, 7), 10))
+    .filter((n) => !isNaN(n));
+
+  const maxNumber = existingNumbers.length > 0 ? Math.max(...existingNumbers) : 0;
+  const nextNumber = maxNumber + 10;
+  const paddedNumber = String(nextNumber).padStart(4, '0');
+  const code = nameToCode(name);
+
+  const candidate = `${prefix}${paddedNumber}${code}`;
+
+  // Si el candidato ya existe, usar el reservado +1
+  if (existingSkus.includes(candidate)) {
+    const fallbackNumber = nextNumber + 1;
+    return `${prefix}${String(fallbackNumber).padStart(4, '0')}${code}`;
+  }
+
+  return candidate;
+};
+
+type BeverageFormValues = {
   name: string;
-  sku: string;
+  categoryName: string;
   stock: number;
-  stockUnit: 'u' | 'g' | 'ml';
-  purchaseUnit: string;
-  conversionFactor: number;
-  conversionUnit: 'u' | 'g' | 'ml';
   reorderPoint: number;
   allergens: string[];
   codeArticlePurchase: string;
 };
 
-const defaultValues: DrinkFormValues = {
+const defaultValues: BeverageFormValues = {
   name: '',
-  sku: '',
+  categoryName: '',
   stock: 0,
-  stockUnit: 'u',
-  purchaseUnit: 'unidad',
-  conversionFactor: 1,
-  conversionUnit: 'u',
   reorderPoint: 0,
   allergens: [],
   codeArticlePurchase: ''
 };
 
 // Alérgenos comunes
-const commonAllergens = ['huevo', 'lacteos', 'gluten', 'frutos secos', 'pescado'];
+const commonAllergens = ['huevo', 'lacteos', 'gluten', 'frutos secos', 'pescado', 'sulfitos'];
+
+// Sub-componente para preview del SKU (se actualiza reactivamente)
+const SkuPreview = ({
+  control,
+  existingSkus,
+  editSku
+}: {
+  control: ReturnType<typeof useForm<BeverageFormValues>>['control'];
+  existingSkus: string[];
+  editSku?: string;
+}) => {
+  const name = useWatch({ control, name: 'name' });
+  const categoryName = useWatch({ control, name: 'categoryName' });
+
+  const sku = editSku ?? generateBeverageSku(categoryName, name, existingSkus);
+
+  if (!sku) return null;
+
+  return (
+    <Box
+      sx={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 1,
+        px: 2,
+        py: 1,
+        bgcolor: 'action.hover',
+        borderRadius: 1,
+        border: '1px solid',
+        borderColor: 'divider'
+      }}
+    >
+      <TagIcon fontSize="small" color="primary" />
+      <Typography variant="body2" color="text.secondary">
+        SKU generado:
+      </Typography>
+      <Typography variant="body2" fontWeight={700} fontFamily="monospace">
+        {sku}
+      </Typography>
+    </Box>
+  );
+};
 
 const DrinksPage = () => {
-  const { ingredients, fetchIngredients, error } = useInventoryStore((state) => ({
-    ingredients: state.ingredients,
-    fetchIngredients: state.fetchIngredients,
+  const { beverages, fetchBeverages, error } = useInventoryStore((state) => ({
+    beverages: state.beverages,
+    fetchBeverages: state.fetchBeverages,
     error: state.error
   }));
 
   const [open, setOpen] = useState(false);
   const [dialogMode, setDialogMode] = useState<'create' | 'edit' | 'duplicate'>('create');
-  const [selectedDrink, setSelectedDrink] = useState<Ingredient | null>(null);
-  const [confirmDelete, setConfirmDelete] = useState<Ingredient | null>(null);
+  const [selectedDrink, setSelectedDrink] = useState<Beverage | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<Beverage | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
 
   const {
@@ -75,27 +159,21 @@ const DrinksPage = () => {
     handleSubmit,
     reset,
     control,
+    getValues,
     formState: { isSubmitting }
-  } = useForm<DrinkFormValues>({ defaultValues });
+  } = useForm<BeverageFormValues>({ defaultValues });
 
   useEffect(() => {
-    void fetchIngredients();
-  }, [fetchIngredients]);
+    void fetchBeverages();
+  }, [fetchBeverages]);
 
-  // Mostrar ingredientes de bebidas
-  const drinks = useMemo(
-    () => ingredients.filter((ingredient) => ingredient.category === 'bebida'),
-    [ingredients]
-  );
+  const existingSkus = useMemo(() => beverages.map((b) => b.sku).filter(Boolean), [beverages]);
 
   const filteredDrinks = useMemo(() => {
     const normalizedTerm = searchTerm.trim().toLowerCase();
-    if (!normalizedTerm) return drinks;
-    return drinks.filter((drink) => {
-      const nameMatch = drink.name.toLowerCase().includes(normalizedTerm);
-      return nameMatch;
-    });
-  }, [drinks, searchTerm]);
+    if (!normalizedTerm) return beverages;
+    return beverages.filter((drink) => drink.name.toLowerCase().includes(normalizedTerm));
+  }, [beverages, searchTerm]);
 
   const handleOpen = () => {
     setDialogMode('create');
@@ -109,17 +187,13 @@ const DrinksPage = () => {
     setSelectedDrink(null);
   };
 
-  const handleEdit = (drink: Ingredient) => {
+  const handleEdit = (drink: Beverage) => {
     setDialogMode('edit');
     setSelectedDrink(drink);
     reset({
       name: drink.name,
-      sku: drink.sku ?? '',
+      categoryName: drink.categoryName ?? '',
       stock: drink.stock,
-      stockUnit: drink.stockUnit ?? 'u',
-      purchaseUnit: drink.purchaseUnit ?? 'unidad',
-      conversionFactor: drink.conversionFactor ?? 1,
-      conversionUnit: drink.conversionUnit ?? 'u',
       reorderPoint: drink.reorderPoint ?? 0,
       allergens: drink.allergens ?? [],
       codeArticlePurchase: drink.codeArticlePurchase ?? ''
@@ -127,17 +201,13 @@ const DrinksPage = () => {
     setOpen(true);
   };
 
-  const handleDuplicate = (drink: Ingredient) => {
+  const handleDuplicate = (drink: Beverage) => {
     setDialogMode('duplicate');
     setSelectedDrink(drink);
     reset({
       name: `${drink.name} (copia)`,
-      sku: `${drink.sku ?? ''}-COPY`,
+      categoryName: drink.categoryName ?? '',
       stock: drink.stock,
-      stockUnit: drink.stockUnit ?? 'u',
-      purchaseUnit: drink.purchaseUnit ?? 'unidad',
-      conversionFactor: drink.conversionFactor ?? 1,
-      conversionUnit: drink.conversionUnit ?? 'u',
       reorderPoint: drink.reorderPoint ?? 0,
       allergens: drink.allergens ?? [],
       codeArticlePurchase: drink.codeArticlePurchase ?? ''
@@ -145,33 +215,36 @@ const DrinksPage = () => {
     setOpen(true);
   };
 
-  const handleDelete = (drink: Ingredient) => {
+  const handleDelete = (drink: Beverage) => {
     setConfirmDelete(drink);
   };
 
   const confirmDeleteDrink = async () => {
     if (!confirmDelete) return;
-    await apiClient.delete(`/ingredients/${confirmDelete._id}`);
+    await apiClient.delete(`/beverages/${confirmDelete._id}`);
     setConfirmDelete(null);
-    await fetchIngredients();
+    await fetchBeverages();
   };
 
   const onSubmit = handleSubmit(async (values) => {
-    // Asegurar que la categoría sea 'bebida'
-    const payload = {
-      ...values,
-      category: 'bebida'
-    };
-
     if (dialogMode === 'edit' && selectedDrink) {
-      await apiClient.put<Ingredient>(`/ingredients/${selectedDrink._id}`, payload);
+      // En edición: no cambiar el SKU
+      await apiClient.put<Beverage>(`/beverages/${selectedDrink._id}`, {
+        name: values.name,
+        stock: values.stock,
+        reorderPoint: values.reorderPoint,
+        allergens: values.allergens,
+        codeArticlePurchase: values.codeArticlePurchase
+      });
     } else {
-      await apiClient.post<Ingredient>('/ingredients', payload);
+      // En creación / duplicación: generar SKU automáticamente
+      const sku = generateBeverageSku(values.categoryName, values.name, existingSkus);
+      if (!sku) return;
+      await apiClient.post<Beverage>('/beverages', { ...values, sku });
     }
-
     setOpen(false);
     setSelectedDrink(null);
-    await fetchIngredients();
+    await fetchBeverages();
   });
 
   const dialogTitle =
@@ -179,7 +252,9 @@ const DrinksPage = () => {
       ? 'Editar bebida'
       : dialogMode === 'duplicate'
       ? 'Duplicar bebida'
-      : 'Nueva bebida';
+      : 'Crear nueva bebida';
+
+  const isEditMode = dialogMode === 'edit';
 
   return (
     <Grid container spacing={3} sx={{ py: 0 }}>
@@ -188,7 +263,7 @@ const DrinksPage = () => {
           <Typography variant="h4">Bebidas</Typography>
           <RequirePermission resource="ingredients" action="create" hide>
             <Button variant="contained" onClick={handleOpen}>
-              Nueva bebida
+              Crear Nuevo
             </Button>
           </RequirePermission>
         </Stack>
@@ -226,11 +301,11 @@ const DrinksPage = () => {
           <Card variant="outlined">
             <CardContent>
               <Typography variant="h6">{drink.name}</Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                Stock: {drink.stock} {drink.stockUnit ?? 'u'}
-              </Typography>
               <Typography variant="body2" color="text.secondary">
-                Punto de pedido: {drink.reorderPoint} {drink.stockUnit ?? 'u'}
+                {drink.categoryName ?? '—'} · <Typography component="span" variant="body2" fontFamily="monospace">{drink.sku}</Typography>
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                Stock: {drink.stock} ml · Pedido: {drink.reorderPoint} ml
               </Typography>
               <Stack direction="row" spacing={1.5} sx={{ mt: 2 }}>
                 <RequirePermission resource="ingredients" action="update" hide>
@@ -271,22 +346,58 @@ const DrinksPage = () => {
         <DialogTitle>{dialogTitle}</DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ mt: 1 }}>
-            <TextField label="Nombre" {...register('name', { required: true })} />
-            <TextField label="SKU" {...register('sku', { required: true })} />
-            <TextField label="Stock inicial" type="number" {...register('stock', { valueAsNumber: true })} />
-            <TextField label="Unidad de stock" select {...register('stockUnit', { required: true })}>
-              <MenuItem value="u">Unidades (u)</MenuItem>
-              <MenuItem value="g">Gramos (g)</MenuItem>
-              <MenuItem value="ml">Mililitros (ml)</MenuItem>
-            </TextField>
-            <TextField label="Unidad de compra" {...register('purchaseUnit', { required: true })} />
-            <TextField label="Factor de conversión" type="number" {...register('conversionFactor', { valueAsNumber: true, required: true })} />
-            <TextField label="Unidad de conversión" select {...register('conversionUnit', { required: true })}>
-              <MenuItem value="u">Unidades (u)</MenuItem>
-              <MenuItem value="g">Gramos (g)</MenuItem>
-              <MenuItem value="ml">Mililitros (ml)</MenuItem>
-            </TextField>
-            <TextField label="Punto de pedido" type="number" {...register('reorderPoint', { valueAsNumber: true })} />
+            <TextField
+              label="Nombre"
+              {...register('name', { required: true })}
+            />
+            {isEditMode ? (
+              // En edición: mostrar SKU y categoría como solo lectura
+              <Stack spacing={2}>
+                <TextField
+                  label="Categoría"
+                  value={getValues('categoryName')}
+                  InputProps={{ readOnly: true }}
+                  helperText="La categoría no se puede cambiar sin modificar el SKU"
+                />
+                <TextField
+                  label="SKU"
+                  value={selectedDrink?.sku ?? ''}
+                  InputProps={{ readOnly: true }}
+                  helperText="El SKU es inmutable"
+                />
+              </Stack>
+            ) : (
+              // En creación / duplicación: selector de categoría + preview SKU
+              <Stack spacing={2}>
+                <TextField
+                  select
+                  label="Categoría *"
+                  defaultValue=""
+                  {...register('categoryName', { required: true })}
+                  helperText="La categoría determina el elemento del SKU"
+                >
+                  {BEVERAGE_CATEGORIES.map((cat) => (
+                    <MenuItem key={cat} value={cat}>
+                      {cat} <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 1 }}>({CATEGORY_ELEMENT_MAP[cat]})</Typography>
+                    </MenuItem>
+                  ))}
+                </TextField>
+                <SkuPreview
+                  control={control}
+                  existingSkus={existingSkus}
+                />
+              </Stack>
+            )}
+            <TextField
+              label="Stock inicial (ml)"
+              type="number"
+              {...register('stock', { valueAsNumber: true })}
+            />
+            <TextField
+              label="Punto de pedido (ml)"
+              type="number"
+              {...register('reorderPoint', { valueAsNumber: true })}
+            />
             <Controller
               control={control}
               name="allergens"
@@ -296,9 +407,7 @@ const DrinksPage = () => {
                   freeSolo
                   options={commonAllergens}
                   value={value || []}
-                  onChange={(_, newValue) => {
-                    onChange(newValue);
-                  }}
+                  onChange={(_, newValue) => onChange(newValue)}
                   renderTags={(value, getTagProps) =>
                     value.map((option, index) => (
                       <Chip
@@ -329,6 +438,7 @@ const DrinksPage = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
       <Dialog open={Boolean(confirmDelete)} onClose={() => setConfirmDelete(null)} maxWidth="xs" fullWidth>
         <DialogTitle>Confirmar eliminación</DialogTitle>
         <DialogContent>
@@ -346,5 +456,3 @@ const DrinksPage = () => {
 };
 
 export default DrinksPage;
-
-

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Autocomplete,
+  Box,
   Button,
   Card,
   CardContent,
@@ -11,23 +12,79 @@ import {
   DialogTitle,
   Grid,
   InputAdornment,
+  MenuItem,
   Stack,
   TextField,
   Typography
 } from '@mui/material';
-import { useForm, useFieldArray, Controller } from 'react-hook-form';
+import { useForm, useFieldArray, Controller, useWatch } from 'react-hook-form';
 import { useInventoryStore } from '../hooks/useInventoryStore';
 import apiClient from '../services/apiClient';
-import { useAuth } from '../contexts/AuthContext';
 import { RequirePermission } from '../components/auth/RequirePermission';
 import SearchIcon from '@mui/icons-material/Search';
 import type { Dish } from '../types';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import TagIcon from '@mui/icons-material/Tag';
+
+// Mapeo categoryName → elemento SKU (según SKU_ELEMENTS.md, sección Recetas)
+const CATEGORY_ELEMENT_MAP: Record<string, string> = {
+  'Platos':           'PL',
+  'Carta':            'CT',
+  'Platos principales': 'PP',
+  'Combo':            'CB',
+  'Postres':          'PT',
+  'Entrantes':        'EN',
+  'Menu del dia':     'MD',
+  'Null':             'NL',
+  'Cafe':             'CA'
+};
+
+const RECIPE_CATEGORIES = Object.keys(CATEGORY_ELEMENT_MAP);
+
+// Genera un código de 3 letras a partir del nombre
+const nameToCode = (name: string): string => {
+  const cleaned = name.replace(/[^a-zA-Z]/g, '').toUpperCase();
+  return cleaned.substring(0, 3).padEnd(3, 'X');
+};
+
+// Genera un SKU único y correlativo para una receta
+const generateRecipeSku = (
+  categoryName: string,
+  name: string,
+  existingSkus: string[]
+): string => {
+  const element = CATEGORY_ELEMENT_MAP[categoryName];
+  if (!element || !name.trim()) return '';
+
+  const prefix = `R${element}`;
+
+  // Extraer números existentes para este elemento (formato: R[EL][4 dígitos][3 letras])
+  const existingNumbers = existingSkus
+    .filter((sku) => sku.startsWith(prefix) && sku.length === 10)
+    .map((sku) => parseInt(sku.substring(3, 7), 10))
+    .filter((n) => !isNaN(n));
+
+  const maxNumber = existingNumbers.length > 0 ? Math.max(...existingNumbers) : 0;
+  const nextNumber = maxNumber + 10;
+  const paddedNumber = String(nextNumber).padStart(4, '0');
+  const code = nameToCode(name);
+
+  const candidate = `${prefix}${paddedNumber}${code}`;
+
+  // Si el candidato ya existe, usar el reservado +1
+  if (existingSkus.includes(candidate)) {
+    const fallbackNumber = nextNumber + 1;
+    return `${prefix}${String(fallbackNumber).padStart(4, '0')}${code}`;
+  }
+
+  return candidate;
+};
 
 type RecipeFormValues = {
   name: string;
+  categoryName: string;
   description?: string;
   recipe: Array<{
     ingredient: string;
@@ -37,8 +94,51 @@ type RecipeFormValues = {
 
 const defaultValues: RecipeFormValues = {
   name: '',
+  categoryName: '',
   description: '',
   recipe: [{ ingredient: '', quantityInGrams: 0 }]
+};
+
+// Sub-componente para preview del SKU (se actualiza reactivamente)
+const SkuPreview = ({
+  control,
+  existingSkus,
+  editSku
+}: {
+  control: ReturnType<typeof useForm<RecipeFormValues>>['control'];
+  existingSkus: string[];
+  editSku?: string;
+}) => {
+  const name = useWatch({ control, name: 'name' });
+  const categoryName = useWatch({ control, name: 'categoryName' });
+
+  const sku = editSku ?? generateRecipeSku(categoryName, name, existingSkus);
+
+  if (!sku) return null;
+
+  return (
+    <Box
+      sx={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 1,
+        px: 2,
+        py: 1,
+        bgcolor: 'action.hover',
+        borderRadius: 1,
+        border: '1px solid',
+        borderColor: 'divider'
+      }}
+    >
+      <TagIcon fontSize="small" color="primary" />
+      <Typography variant="body2" color="text.secondary">
+        SKU generado:
+      </Typography>
+      <Typography variant="body2" fontWeight={700} fontFamily="monospace">
+        {sku}
+      </Typography>
+    </Box>
+  );
 };
 
 const RecipesPage = () => {
@@ -57,6 +157,7 @@ const RecipesPage = () => {
     control,
     handleSubmit,
     reset,
+    getValues,
     formState: { isSubmitting }
   } = useForm<RecipeFormValues>({ defaultValues });
 
@@ -73,6 +174,8 @@ const RecipesPage = () => {
     });
   }, [recipes, searchTerm]);
 
+  const existingSkus = useMemo(() => dishes.map((d) => d.sku).filter(Boolean), [dishes]);
+
   useEffect(() => {
     void fetchIngredients();
     void fetchDishes();
@@ -81,7 +184,6 @@ const RecipesPage = () => {
   const ingredientOptions = useMemo(
     () =>
       ingredients
-        .filter((ingredient) => ingredient.category !== 'bebida')
         .map((ingredient) => ({
           label: ingredient.description ?? ingredient.name,
           value: ingredient._id
@@ -99,6 +201,7 @@ const RecipesPage = () => {
         : [{ ingredient: '', quantityInGrams: 0 }];
     return {
       name: dish.name,
+      categoryName: '', // Las recetas existentes no tienen categoryName, se deriva del SKU
       description: dish.description ?? '',
       recipe
     };
@@ -124,7 +227,8 @@ const RecipesPage = () => {
     const mapped = mapDishToFormValues(dish);
     reset({
       ...mapped,
-      name: `${mapped.name} (copia)`
+      name: `${mapped.name} (copia)`,
+      categoryName: '' // Resetear para generar nuevo SKU
     });
     setOpen(true);
   };
@@ -153,16 +257,20 @@ const RecipesPage = () => {
         quantityInGrams: item.quantityInGrams
       }));
 
-    const payload = {
+    const payload: any = {
       name: values.name,
       description: values.description,
       recipe
     };
 
     if (dialogMode === 'edit' && selectedDish) {
+      // En edición: no cambiar el SKU
       await apiClient.put(`/dishes/${selectedDish._id}`, payload);
     } else {
-      await apiClient.post<Dish>('/dishes', payload);
+      // En creación / duplicación: generar SKU automáticamente
+      const sku = generateRecipeSku(values.categoryName, values.name, existingSkus);
+      if (!sku) return;
+      await apiClient.post<Dish>('/dishes', { ...payload, sku });
     }
     setOpen(false);
     setSelectedDish(null);
@@ -174,7 +282,9 @@ const RecipesPage = () => {
       ? 'Editar receta'
       : dialogMode === 'duplicate'
         ? 'Duplicar receta'
-        : 'Nueva receta';
+        : 'Crear nueva receta';
+
+  const isEditMode = dialogMode === 'edit';
 
   return (
     <Grid container spacing={3} sx={{ py: 0 }}>
@@ -183,7 +293,7 @@ const RecipesPage = () => {
           <Typography variant="h4">Recetas</Typography>
           <RequirePermission resource="recipes" action="create" hide>
             <Button variant="contained" onClick={handleOpen}>
-              Nueva receta
+              Crear Nuevo
             </Button>
           </RequirePermission>
         </Stack>
@@ -210,17 +320,23 @@ const RecipesPage = () => {
           }}
         />
       </Grid>
+      <Grid item xs={12}>
+        <Typography variant="body2" color="text.secondary">
+          Mostrando {filteredRecipes.length} {filteredRecipes.length === 1 ? 'receta' : 'recetas'}
+        </Typography>
+      </Grid>
 
       {filteredRecipes.map((dish) => (
         <Grid item xs={12} md={6} key={dish._id}>
           <Card variant="outlined">
             <CardContent>
               <Typography variant="h6">{dish.name}</Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                {dish.description}
+              <Typography variant="body2" color="text.secondary">
+                <Typography component="span" variant="body2" fontFamily="monospace">{dish.sku}</Typography>
+                {dish.description && ` · ${dish.description}`}
               </Typography>
-              <Stack spacing={0.5}>
-                {dish.recipe.map((item) => {
+              <Stack spacing={0.5} sx={{ mt: 1 }}>
+                {dish.recipe.map((item, index) => {
                   const ingredientRef = item.ingredient;
                   const ingredientId =
                     typeof ingredientRef === 'string' ? ingredientRef : ingredientRef?._id ?? '';
@@ -230,7 +346,7 @@ const RecipesPage = () => {
                   const ingredientDisplay = ingredient?.description ?? ingredient?.name ?? ingredientId;
 
                   return (
-                    <Typography key={`${dish._id}-${ingredientId}`} variant="body2">
+                    <Typography key={`${dish._id}-${ingredientId}-${index}`} variant="body2">
                       {ingredientDisplay} • {item.quantityInGrams} g
                     </Typography>
                   );
@@ -281,6 +397,42 @@ const RecipesPage = () => {
               rules={{ required: true }}
               render={({ field }) => <TextField label="Nombre" {...field} />}
             />
+            {isEditMode ? (
+              // En edición: mostrar SKU como solo lectura
+              <TextField
+                label="SKU"
+                value={selectedDish?.sku ?? ''}
+                InputProps={{ readOnly: true }}
+                helperText="El SKU es inmutable"
+              />
+            ) : (
+              // En creación / duplicación: selector de categoría + preview SKU
+              <Stack spacing={2}>
+                <Controller
+                  control={control}
+                  name="categoryName"
+                  rules={{ required: true }}
+                  render={({ field }) => (
+                    <TextField
+                      select
+                      label="Categoría *"
+                      {...field}
+                      helperText="La categoría determina el elemento del SKU"
+                    >
+                      {RECIPE_CATEGORIES.map((cat) => (
+                        <MenuItem key={cat} value={cat}>
+                          {cat} <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 1 }}>({CATEGORY_ELEMENT_MAP[cat]})</Typography>
+                        </MenuItem>
+                      ))}
+                    </TextField>
+                  )}
+                />
+                <SkuPreview
+                  control={control}
+                  existingSkus={existingSkus}
+                />
+              </Stack>
+            )}
             <Controller
               control={control}
               name="description"
@@ -352,4 +504,3 @@ const RecipesPage = () => {
 };
 
 export default RecipesPage;
-
