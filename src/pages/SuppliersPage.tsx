@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
+  Box,
   Button,
   Card,
   CardContent,
@@ -23,10 +24,132 @@ import SearchIcon from '@mui/icons-material/Search';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import TagIcon from '@mui/icons-material/Tag';
+import { useForm, Controller, useWatch } from 'react-hook-form';
 import apiClient from '../services/apiClient';
-import { useAuth } from '../contexts/AuthContext';
 import { RequirePermission } from '../components/auth/RequirePermission';
 import type { Supplier } from '../types';
+
+// Mapeo categoryName → elemento SKU (según SKU_ELEMENTS.md, sección Proveedores)
+const CATEGORY_ELEMENT_MAP: Record<string, string> = {
+  'All/General':     'GN',
+  'Drinks':          'BB',
+  'Salads/Fresh':    'FR'
+};
+
+const SUPPLIER_CATEGORIES = Object.keys(CATEGORY_ELEMENT_MAP);
+
+// Genera un código de 3 letras a partir del nombre
+const nameToCode = (name: string): string => {
+  const cleaned = name.replace(/[^a-zA-Z]/g, '').toUpperCase();
+  return cleaned.substring(0, 3).padEnd(3, 'X');
+};
+
+// Genera un SKU único y correlativo para un proveedor
+const generateSupplierSku = (
+  categoryName: string,
+  name: string,
+  existingSkus: string[]
+): string => {
+  const element = CATEGORY_ELEMENT_MAP[categoryName];
+  if (!element || !name.trim()) return '';
+
+  const prefix = `S${element}`;
+
+  // Extraer números existentes para este elemento (formato: S[EL][4 dígitos][3 letras])
+  const existingNumbers = existingSkus
+    .filter((sku) => sku.startsWith(prefix) && sku.length === 10)
+    .map((sku) => parseInt(sku.substring(3, 7), 10))
+    .filter((n) => !isNaN(n) && n % 10 === 0) // Solo números válidos (múltiplos de 10)
+    .filter((n) => {
+      // Excluir rango reservado 0011-0019
+      const lastTwoDigits = n % 100;
+      return !(lastTwoDigits >= 11 && lastTwoDigits <= 19);
+    });
+
+  const maxNumber = existingNumbers.length > 0 ? Math.max(...existingNumbers) : 0;
+  const nextNumber = maxNumber + 10;
+  const paddedNumber = String(nextNumber).padStart(4, '0');
+  const code = nameToCode(name);
+
+  const candidate = `${prefix}${paddedNumber}${code}`;
+
+  // Si el candidato ya existe, usar el reservado +1
+  if (existingSkus.includes(candidate)) {
+    const fallbackNumber = nextNumber + 1;
+    return `${prefix}${String(fallbackNumber).padStart(4, '0')}${code}`;
+  }
+
+  return candidate;
+};
+
+type SupplierFormValues = {
+  categoryName: string;
+  name: string;
+  nif: string;
+  address: string;
+  city: string;
+  zip: string;
+  country: string;
+  tel: string;
+  contact: string;
+  email: string;
+};
+
+const defaultValues: SupplierFormValues = {
+  categoryName: '',
+  name: '',
+  nif: '',
+  address: '',
+  city: '',
+  zip: '',
+  country: '',
+  tel: '',
+  contact: '',
+  email: ''
+};
+
+// Sub-componente para preview del SKU (se actualiza reactivamente)
+const SkuPreview = ({
+  control,
+  existingSkus,
+  editSku
+}: {
+  control: ReturnType<typeof useForm<SupplierFormValues>>['control'];
+  existingSkus: string[];
+  editSku?: string;
+}) => {
+  const name = useWatch({ control, name: 'name' });
+  const categoryName = useWatch({ control, name: 'categoryName' });
+
+  const sku = editSku ?? generateSupplierSku(categoryName, name, existingSkus);
+
+  if (!sku) return null;
+
+  return (
+    <Box
+      sx={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 1,
+        px: 2,
+        py: 1,
+        bgcolor: 'action.hover',
+        borderRadius: 1,
+        border: '1px solid',
+        borderColor: 'divider'
+      }}
+    >
+      <TagIcon fontSize="small" color="primary" />
+      <Typography variant="body2" color="text.secondary">
+        SKU generado:
+      </Typography>
+      <Typography variant="body2" fontWeight={700} fontFamily="monospace">
+        {sku}
+      </Typography>
+    </Box>
+  );
+};
 
 const formatDate = (value: string | null) => {
   if (!value) return 'Sin registros';
@@ -41,62 +164,6 @@ const formatDate = (value: string | null) => {
   });
 };
 
-const validateSupplierSku = (sku: string): { valid: boolean; error?: string } => {
-  const trimmedSku = sku.trim().toUpperCase();
-
-  // Verificar longitud exacta de 10 caracteres
-  if (trimmedSku.length !== 10) {
-    return { valid: false, error: 'El SKU debe tener exactamente 10 caracteres' };
-  }
-
-  // Verificar que empiece con S (Supplier)
-  if (trimmedSku[0] !== 'S') {
-    return { valid: false, error: 'El SKU debe empezar con "S" (Supplier)' };
-  }
-
-  // Verificar elemento (posiciones 1-2): AL, DK o SL
-  const element = trimmedSku.substring(1, 3);
-  const validElements = ['AL', 'DK', 'SL'];
-  if (!validElements.includes(element)) {
-    return {
-      valid: false,
-      error: `El elemento debe ser AL (General), DK (Drinks) o SL (Salads/Fresh). Actual: ${element}`
-    };
-  }
-
-  // Verificar número (posiciones 3-6): debe ser 0010, 0020, 0030, etc.
-  const numberPart = trimmedSku.substring(3, 7);
-  const numberValue = parseInt(numberPart, 10);
-  if (Number.isNaN(numberValue)) {
-    return { valid: false, error: 'La parte numérica debe ser un número válido' };
-  }
-  if (numberValue % 10 !== 0) {
-    return {
-      valid: false,
-      error: 'El número debe terminar en 0 (0010, 0020, 0030, etc.)'
-    };
-  }
-  if (numberValue < 10) {
-    return { valid: false, error: 'El número debe ser al menos 0010' };
-  }
-  // Verificar que no esté en el rango reservado 0011-0019
-  const lastTwoDigits = numberValue % 100;
-  if (lastTwoDigits >= 11 && lastTwoDigits <= 19) {
-    return {
-      valid: false,
-      error: 'El número no puede estar en el rango 0011-0019 (reservado para colisiones)'
-    };
-  }
-
-  // Verificar código (posiciones 7-9): debe ser 3 letras
-  const codePart = trimmedSku.substring(7, 10);
-  if (!/^[A-Z]{3}$/.test(codePart)) {
-    return { valid: false, error: 'El código final debe ser 3 letras' };
-  }
-
-  return { valid: true };
-};
-
 const SuppliersPage = () => {
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -105,22 +172,19 @@ const SuppliersPage = () => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogMode, setDialogMode] = useState<'create' | 'edit' | 'duplicate'>('edit');
   const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(null);
-  const [formValues, setFormValues] = useState({
-    sku: '',
-    name: '',
-    nif: '',
-    address: '',
-    city: '',
-    zip: '',
-    country: '',
-    tel: '',
-    contact: '',
-    email: ''
-  });
-  const [duplicateTargetSku, setDuplicateTargetSku] = useState<string>('');
-  const [processing, setProcessing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<Supplier | null>(null);
-  const [skuError, setSkuError] = useState<string | null>(null);
+  const [processing, setProcessing] = useState(false);
+  const [duplicateTargetSku, setDuplicateTargetSku] = useState<string>('');
+
+  const {
+    control,
+    handleSubmit,
+    reset,
+    getValues,
+    formState: { isSubmitting }
+  } = useForm<SupplierFormValues>({ defaultValues });
+
+  const existingSkus = useMemo(() => suppliers.map((s) => s.sku).filter(Boolean), [suppliers]);
 
   const fetchSuppliers = useCallback(async () => {
     setLoading(true);
@@ -148,28 +212,16 @@ const SuppliersPage = () => {
   const handleOpen = () => {
     setDialogMode('create');
     setSelectedSupplier(null);
-    setFormValues({
-      sku: '',
-      name: '',
-      nif: '',
-      address: '',
-      city: '',
-      zip: '',
-      country: '',
-      tel: '',
-      contact: '',
-      email: ''
-    });
+    reset(defaultValues);
     setDuplicateTargetSku('');
-    setSkuError(null);
     setDialogOpen(true);
   };
 
   const handleEdit = (supplier: Supplier) => {
     setSelectedSupplier(supplier);
     setDialogMode('edit');
-    setFormValues({
-      sku: supplier.sku || '',
+    reset({
+      categoryName: '', // Las categorías existentes no están almacenadas, se deriva del SKU
       name: supplier.name || '',
       nif: supplier.nif || '',
       address: supplier.address || '',
@@ -187,8 +239,8 @@ const SuppliersPage = () => {
   const handleDuplicate = (supplier: Supplier) => {
     setSelectedSupplier(supplier);
     setDialogMode('duplicate');
-    setFormValues({
-      sku: '',
+    reset({
+      categoryName: '', // Resetear para generar nuevo SKU
       name: '',
       nif: '',
       address: '',
@@ -217,65 +269,65 @@ const SuppliersPage = () => {
   const handleDialogClose = () => {
     setDialogOpen(false);
     setSelectedSupplier(null);
-    setFormValues({
-      sku: '',
-      name: '',
-      nif: '',
-      address: '',
-      city: '',
-      zip: '',
-      country: '',
-      tel: '',
-      contact: '',
-      email: ''
-    });
+    reset(defaultValues);
     setDuplicateTargetSku('');
-    setSkuError(null);
     setProcessing(false);
   };
 
-  const handleDialogSubmit = async () => {
+  const onSubmit = handleSubmit(async (values) => {
     setProcessing(true);
     try {
       if (dialogMode === 'create') {
-        const trimmedSku = formValues.sku.trim();
-        const trimmedName = formValues.name.trim();
-        if (!trimmedSku || !trimmedName) return;
+        const sku = generateSupplierSku(values.categoryName, values.name, existingSkus);
+        if (!sku) {
+          setProcessing(false);
+          return;
+        }
         await apiClient.post('/suppliers', {
-          sku: trimmedSku,
-          name: trimmedName,
-          nif: formValues.nif,
-          address: formValues.address,
-          city: formValues.city,
-          zip: formValues.zip,
-          country: formValues.country,
-          tel: formValues.tel,
-          contact: formValues.contact,
-          email: formValues.email
+          sku,
+          name: values.name.trim(),
+          nif: values.nif,
+          address: values.address,
+          city: values.city,
+          zip: values.zip,
+          country: values.country,
+          tel: values.tel,
+          contact: values.contact,
+          email: values.email
         });
       } else if (dialogMode === 'edit') {
-        if (!selectedSupplier) return;
-        const trimmedName = formValues.name.trim();
-        if (!trimmedName) return;
+        if (!selectedSupplier) {
+          setProcessing(false);
+          return;
+        }
         const encodedSku = encodeURIComponent(selectedSupplier.sku);
         await apiClient.put(`/suppliers/${encodedSku}`, {
-          name: trimmedName,
-          nif: formValues.nif,
-          address: formValues.address,
-          city: formValues.city,
-          zip: formValues.zip,
-          country: formValues.country,
-          tel: formValues.tel,
-          contact: formValues.contact,
-          email: formValues.email
+          name: values.name.trim(),
+          nif: values.nif,
+          address: values.address,
+          city: values.city,
+          zip: values.zip,
+          country: values.country,
+          tel: values.tel,
+          contact: values.contact,
+          email: values.email
         });
-      } else {
-        if (!selectedSupplier) return;
-        if (!duplicateTargetSku.trim()) return;
-        const encodedSku = encodeURIComponent(selectedSupplier.sku);
-        await apiClient.post(`/suppliers/${encodedSku}/duplicate`, { newSku: duplicateTargetSku.trim() });
       }
 
+      handleDialogClose();
+      await fetchSuppliers();
+    } catch (error) {
+      setError('Error al procesar la solicitud');
+      setProcessing(false);
+    }
+  });
+
+  const handleDuplicateSubmit = async () => {
+    if (!selectedSupplier || !duplicateTargetSku.trim()) return;
+    setProcessing(true);
+    try {
+      const encodedSku = encodeURIComponent(selectedSupplier.sku);
+      await apiClient.post(`/suppliers/${encodedSku}/duplicate`, { newSku: duplicateTargetSku.trim() });
       handleDialogClose();
       await fetchSuppliers();
     } catch (error) {
@@ -285,6 +337,8 @@ const SuppliersPage = () => {
   };
 
   const duplicateTargetOptions = suppliers.filter((s) => s.sku !== selectedSupplier?.sku);
+
+  const isEditMode = dialogMode === 'edit';
 
   return (
     <Grid container spacing={3} sx={{ py: 0 }}>
@@ -314,6 +368,13 @@ const SuppliersPage = () => {
           }}
         />
       </Grid>
+      {!loading && (
+        <Grid item xs={12}>
+          <Typography variant="body2" color="text.secondary">
+            Mostrando {filteredSuppliers.length} {filteredSuppliers.length === 1 ? 'proveedor' : 'proveedores'}
+          </Typography>
+        </Grid>
+      )}
 
       {loading && (
         <Grid item xs={12}>
@@ -341,7 +402,8 @@ const SuppliersPage = () => {
             <CardContent>
               <Typography variant="h6">{supplier.name}</Typography>
               <Typography variant="body2" color="text.secondary">
-                Total de compras: {supplier.totalPurchases}
+                <Typography component="span" variant="body2" fontFamily="monospace">{supplier.sku}</Typography>
+                {' · Total de compras: '}{supplier.totalPurchases}
               </Typography>
               <Typography variant="body2" color="text.secondary">
                 Última compra: {formatDate(supplier.lastPurchase)}
@@ -384,7 +446,7 @@ const SuppliersPage = () => {
       <Dialog open={dialogOpen} onClose={handleDialogClose} fullWidth maxWidth="sm">
         <DialogTitle>
           {dialogMode === 'create'
-            ? 'Nuevo proveedor'
+            ? 'Crear nuevo proveedor'
             : dialogMode === 'edit'
               ? 'Editar proveedor'
               : 'Duplicar compras a proveedor'}
@@ -392,98 +454,95 @@ const SuppliersPage = () => {
         <DialogContent>
           {dialogMode === 'create' || dialogMode === 'edit' ? (
             <Stack spacing={2} sx={{ mt: 1 }}>
-              {dialogMode === 'create' && (
+              {isEditMode ? (
+                // En edición: mostrar SKU como solo lectura
                 <TextField
-                  autoFocus
-                  margin="dense"
-                  label="SKU *"
-                  fullWidth
-                  required
-                  value={formValues.sku}
-                  onChange={(event) => {
-                    const newSku = event.target.value.toUpperCase();
-                    setFormValues({ ...formValues, sku: newSku });
-                    if (newSku.trim()) {
-                      const validation = validateSupplierSku(newSku);
-                      setSkuError(validation.valid ? null : validation.error || null);
-                    } else {
-                      setSkuError(null);
-                    }
-                  }}
-                  error={!!skuError}
-                  helperText={
-                    skuError || 'Formato: S[AL|DK|SL][0010|0020|0030...][ABC] (10 caracteres)'
-                  }
-                  inputProps={{ maxLength: 10 }}
+                  label="SKU"
+                  value={selectedSupplier?.sku ?? ''}
+                  InputProps={{ readOnly: true }}
+                  helperText="El SKU es inmutable"
                 />
+              ) : (
+                // En creación / duplicación: selector de categoría + preview SKU
+                <Stack spacing={2}>
+                  <Controller
+                    control={control}
+                    name="categoryName"
+                    rules={{ required: true }}
+                    render={({ field }) => (
+                      <TextField
+                        select
+                        label="Categoría *"
+                        {...field}
+                        helperText="La categoría determina el elemento del SKU"
+                      >
+                        {SUPPLIER_CATEGORIES.map((cat) => (
+                          <MenuItem key={cat} value={cat}>
+                            {cat} <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 1 }}>({CATEGORY_ELEMENT_MAP[cat]})</Typography>
+                          </MenuItem>
+                        ))}
+                      </TextField>
+                    )}
+                  />
+                  <SkuPreview
+                    control={control}
+                    existingSkus={existingSkus}
+                  />
+                </Stack>
               )}
-              <TextField
-                autoFocus={dialogMode === 'edit'}
-                margin="dense"
-                label="Nombre del proveedor *"
-                fullWidth
-                required
-                value={formValues.name}
-                onChange={(event) => setFormValues({ ...formValues, name: event.target.value })}
+              <Controller
+                control={control}
+                name="name"
+                rules={{ required: true }}
+                render={({ field }) => (
+                  <TextField
+                    autoFocus={isEditMode}
+                    label="Nombre del proveedor *"
+                    {...field}
+                  />
+                )}
               />
-              <TextField
-                margin="dense"
-                label="NIF"
-                fullWidth
-                value={formValues.nif}
-                onChange={(event) => setFormValues({ ...formValues, nif: event.target.value })}
+              <Controller
+                control={control}
+                name="nif"
+                render={({ field }) => <TextField label="NIF" {...field} />}
               />
-              <TextField
-                margin="dense"
-                label="Dirección"
-                fullWidth
-                value={formValues.address}
-                onChange={(event) => setFormValues({ ...formValues, address: event.target.value })}
+              <Controller
+                control={control}
+                name="address"
+                render={({ field }) => <TextField label="Dirección" {...field} />}
               />
               <Stack direction="row" spacing={2}>
-                <TextField
-                  margin="dense"
-                  label="Ciudad"
-                  fullWidth
-                  value={formValues.city}
-                  onChange={(event) => setFormValues({ ...formValues, city: event.target.value })}
+                <Controller
+                  control={control}
+                  name="city"
+                  render={({ field }) => <TextField label="Ciudad" fullWidth {...field} />}
                 />
-                <TextField
-                  margin="dense"
-                  label="Código Postal"
-                  fullWidth
-                  value={formValues.zip}
-                  onChange={(event) => setFormValues({ ...formValues, zip: event.target.value })}
+                <Controller
+                  control={control}
+                  name="zip"
+                  render={({ field }) => <TextField label="Código Postal" fullWidth {...field} />}
                 />
               </Stack>
-              <TextField
-                margin="dense"
-                label="País"
-                fullWidth
-                value={formValues.country}
-                onChange={(event) => setFormValues({ ...formValues, country: event.target.value })}
+              <Controller
+                control={control}
+                name="country"
+                render={({ field }) => <TextField label="País" {...field} />}
               />
-              <TextField
-                margin="dense"
-                label="Teléfono"
-                fullWidth
-                value={formValues.tel}
-                onChange={(event) => setFormValues({ ...formValues, tel: event.target.value })}
+              <Controller
+                control={control}
+                name="tel"
+                render={({ field }) => <TextField label="Teléfono" {...field} />}
               />
-              <TextField
-                margin="dense"
-                label="Contacto"
-                fullWidth
-                value={formValues.contact}
-                onChange={(event) => setFormValues({ ...formValues, contact: event.target.value })}
+              <Controller
+                control={control}
+                name="contact"
+                render={({ field }) => <TextField label="Contacto" {...field} />}
               />
-              <TextField
-                margin="dense"
-                label="Email"
-                fullWidth
-                type="email"
-                value={formValues.email}
-                onChange={(event) => setFormValues({ ...formValues, email: event.target.value })}
+              <Controller
+                control={control}
+                name="email"
+                render={({ field }) => <TextField label="Email" type="email" {...field} />}
               />
             </Stack>
           ) : (
@@ -516,28 +575,29 @@ const SuppliersPage = () => {
           )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleDialogClose} disabled={processing}>
+          <Button onClick={handleDialogClose} disabled={processing || isSubmitting}>
             Cancelar
           </Button>
           <Button
-            onClick={handleDialogSubmit}
+            onClick={dialogMode === 'duplicate' ? handleDuplicateSubmit : onSubmit}
             variant="contained"
             disabled={
               processing ||
-              (dialogMode === 'create'
-                ? !formValues.sku.trim() ||
-                !formValues.name.trim() ||
-                !!skuError ||
-                !validateSupplierSku(formValues.sku.trim()).valid
-                : dialogMode === 'edit'
-                  ? !formValues.name.trim()
-                  : !duplicateTargetSku.trim() || duplicateTargetOptions.length === 0)
+              isSubmitting ||
+              (dialogMode === 'duplicate'
+                ? !duplicateTargetSku.trim() || duplicateTargetOptions.length === 0
+                : false)
             }
           >
-            {dialogMode === 'create' ? 'Crear' : dialogMode === 'edit' ? 'Guardar cambios' : 'Duplicar'}
+            {dialogMode === 'create'
+              ? 'Crear'
+              : dialogMode === 'edit'
+                ? 'Guardar cambios'
+                : 'Duplicar'}
           </Button>
         </DialogActions>
       </Dialog>
+
       <Dialog open={Boolean(confirmDelete)} onClose={() => setConfirmDelete(null)} maxWidth="xs" fullWidth>
         <DialogTitle>Confirmar eliminación</DialogTitle>
         <DialogContent>
@@ -557,5 +617,3 @@ const SuppliersPage = () => {
 };
 
 export default SuppliersPage;
-
-

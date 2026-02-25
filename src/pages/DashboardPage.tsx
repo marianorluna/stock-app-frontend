@@ -37,13 +37,10 @@ const DashboardPage = () => {
       };
     }
 
-    // Usar las mismas categorías que IngredientsPage.tsx para contar ingredientes
-    const ingredientCategories = ['condimentos', 'frutas', 'cereales', 'lacteos', 'otros', 'proteinas', 'vegetales', 'aceites', 'frutos secos', 'gases', 'dulces', 'cafe'];
-    const ingredientItems = snapshot.inventory?.filter(item => ingredientCategories.includes(item.category)) ?? [];
+    const ingredientItems = snapshot.inventory?.filter(item => item.itemType === 'ingredient') ?? [];
     const ingredientLowStock = ingredientItems.filter(item => item.stock <= item.reorderPoint).length;
 
-    // Usar la misma lógica que DrinksPage.tsx para contar bebidas (solo categoría 'bebida', sin 'cafe')
-    const beverageItems = snapshot.inventory?.filter(item => item.category === 'bebida') ?? [];
+    const beverageItems = snapshot.inventory?.filter(item => item.itemType === 'beverage') ?? [];
     const beverageLowStock = beverageItems.filter(item => item.stock <= item.reorderPoint).length;
 
     return {
@@ -66,52 +63,28 @@ const DashboardPage = () => {
 
     const palette = {
       ingredient: theme.palette.primary.main,
-      beverage: theme.palette.info.light,
-      coffee: theme.palette.warning.light
+      beverage: theme.palette.info.light
     };
 
     const aggregated = snapshot.inventory.reduce<Record<string, number>>((acc, item) => {
-      acc[item.category] = (acc[item.category] ?? 0) + item.stock;
+      const key = item.itemType;
+      acc[key] = (acc[key] ?? 0) + item.stock;
       return acc;
     }, {});
 
     const total = Object.values(aggregated).reduce((sum, value) => sum + value, 0);
 
-    // Mapear categorías nuevas a categorías antiguas para el gráfico
-    const categoryMapping: Record<string, string> = {
-      'bebida': 'beverage',
-      'cafe': 'coffee',
-      'condimentos': 'ingredient',
-      'frutas': 'ingredient',
-      'cereales': 'ingredient',
-      'lacteos': 'ingredient',
-      'otros': 'ingredient',
-      'proteinas': 'ingredient',
-      'vegetales': 'ingredient',
-      'aceites': 'ingredient',
-      'frutos secos': 'ingredient',
-      'gases': 'ingredient',
-      'dulces': 'ingredient'
-    };
-
-    // Agregar categorías mapeadas
-    const mappedAggregated: Record<string, number> = {};
-    Object.entries(aggregated).forEach(([category, value]) => {
-      const mappedCategory = categoryMapping[category] || category;
-      mappedAggregated[mappedCategory] = (mappedAggregated[mappedCategory] ?? 0) + value;
-    });
-
-    const segments = (['ingredient', 'beverage', 'coffee'] as const)
-      .filter((category) => (mappedAggregated[category] ?? 0) > 0)
-      .map((category) => ({
-        key: category,
-        label: category === 'ingredient' ? 'Ingredientes' : category === 'coffee' ? 'Café' : 'Bebidas',
-        value: mappedAggregated[category] ?? 0,
-        color: palette[category]
+    const segments = (['ingredient', 'beverage'] as const)
+      .filter((key) => (aggregated[key] ?? 0) > 0)
+      .map((key) => ({
+        key,
+        label: key === 'ingredient' ? 'Ingredientes' : 'Bebidas',
+        value: aggregated[key] ?? 0,
+        color: palette[key]
       }));
 
     return { total, segments };
-  }, [snapshot, theme.palette.info.light, theme.palette.primary.main, theme.palette.warning.light]);
+  }, [snapshot, theme.palette.info.light, theme.palette.primary.main]);
 
   const stockHealth = useMemo(() => {
     if (!snapshot || !snapshot.inventory || snapshot.inventory.length === 0) {
@@ -208,7 +181,7 @@ const DashboardPage = () => {
             <Grid item xs={6}>
               <Box
                 component={Link}
-                to="/inventory/stock"
+                to="/inventory/stock?type=ingredient"
                 sx={{
                   textDecoration: 'none',
                   display: 'block'
@@ -276,7 +249,7 @@ const DashboardPage = () => {
             <Grid item xs={6}>
               <Box
                 component={Link}
-                to="/inventory/stock"
+                to="/inventory/stock?type=beverage"
                 sx={{
                   textDecoration: 'none',
                   display: 'block'
@@ -526,7 +499,7 @@ const DashboardPage = () => {
                   <Stack direction="row" justifyContent="space-between" alignItems="center">
                     <Stack direction="row" spacing={1} alignItems="center">
                       <LocalDrinkIcon color="secondary" fontSize="small" />
-                      <Typography variant="subtitle2">Bebidas & Café</Typography>
+                      <Typography variant="subtitle2">Bebidas</Typography>
                     </Stack>
                     <Typography variant="caption" color="text.secondary">
                       {totals.beverages.total > 0
@@ -558,4 +531,3 @@ const DashboardPage = () => {
 };
 
 export default DashboardPage;
-

@@ -4,7 +4,8 @@ export type InventoryItem = {
   stock: number;
   reorderPoint: number;
   unit: string;
-  category: 'ingredient' | 'beverage' | 'coffee';
+  categoryName: string;
+  itemType: 'ingredient' | 'beverage';
 };
 
 export type StockSnapshot = {
@@ -12,7 +13,7 @@ export type StockSnapshot = {
   inventory: InventoryItem[];
   lowStock: InventoryItem[];
   categoryTotals: Record<
-    'ingredient' | 'beverage' | 'coffee',
+    'ingredient' | 'beverage',
     {
       total: number;
       lowStock: number;
@@ -26,17 +27,29 @@ export type Ingredient = {
   description?: string;
   sku: string;
   stock: number;
-  stockUnit: 'u' | 'g' | 'ml';
-  purchaseUnit: string;
-  conversionFactor: number;
-  conversionUnit: 'u' | 'g' | 'ml';
+  stockUnit: 'g';
+  stockUnitName?: string;
   reorderPoint: number;
-  category: 'bebida' | 'cafe' | 'condimentos' | 'frutas' | 'cereales' | 'lacteos' | 'otros' | 'proteinas' | 'vegetales' | 'aceites' | 'frutos secos' | 'gases' | 'dulces';
+  categoryName: string;
   allergens: string[];
   codeArticlePurchase: string;
-  // Campos de compatibilidad (virtuals del backend)
-  productUnit?: string;
-  conversionFactorToGrams?: number;
+  factorMermaNat?: number;
+  pesoUnitarioGramos?: number;
+  stockMerma?: number;
+};
+
+export type Beverage = {
+  _id: string;
+  name: string;
+  description?: string;
+  sku: string;
+  stock: number;
+  stockUnit: 'ml';
+  stockUnitName?: string;
+  reorderPoint: number;
+  categoryName: string;
+  allergens: string[];
+  codeArticlePurchase: string;
 };
 
 export type RecipeIngredient = {
@@ -116,7 +129,7 @@ export type ManualLogFilters = {
 };
 
 type DishReference = string | { _id: string; name: string; type?: string };
-type IngredientReference = string | { _id: string; name: string; purchaseUnit?: string; productUnit?: string };
+type IngredientReference = string | { _id: string; name: string };
 
 export type SaleRecord = {
   _id: string;
@@ -152,4 +165,3 @@ export type WastageRecord = {
   }>;
   metadata?: Record<string, unknown>;
 };
-

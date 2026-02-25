@@ -136,10 +136,8 @@ const ManualWastageForm = ({ onSubmitted }: Props) => {
       if (!ingredient) {
         return acc;
       }
-      const conversion =
-        item.unit === 'purchase' || item.unit === 'unit'
-          ? ingredient.conversionFactorToGrams || 1
-          : 1;
+      // Todos los ingredientes usan gramos — conversión siempre 1
+      const conversion = 1;
       const quantity = Number(item.quantity ?? 0);
       if (!quantity || quantity <= 0) {
         return acc;
@@ -169,19 +167,9 @@ const ManualWastageForm = ({ onSubmitted }: Props) => {
     const ingredient = ingredients.find((candidate) => candidate._id === item.ingredient);
     if (!ingredient) return;
 
-    const usesProductMeasurement =
-      item.unit === 'product' || item.unit === 'purchase' || item.unit === 'unit';
-    const conversion = usesProductMeasurement ? ingredient.conversionFactorToGrams || 1 : 1;
-    const quantityInGrams = Number(item.quantity) * conversion;
-    const productUnitLabel = ingredient.productUnit ?? ingredient.purchaseUnit ?? 'unidad';
-    const unitLabel =
-      item.unit === 'product'
-        ? productUnitLabel
-        : item.unit === 'purchase'
-          ? ingredient.purchaseUnit ?? productUnitLabel
-          : item.unit === 'unit'
-            ? 'unidades'
-            : 'g';
+    // Todos los ingredientes usan gramos
+    const quantityInGrams = Number(item.quantity);
+    const unitLabel = 'g';
     const name = `${ingredient.name} (${item.quantity} ${unitLabel}${item.reason ? ` • ${item.reason}` : ''})`;
 
     const payload: WastagePresetPayload = {
@@ -309,45 +297,14 @@ const ManualWastageForm = ({ onSubmitted }: Props) => {
                 render={({ field: unitField }) => {
                   const selectedIngredientId = watchedItems?.[index]?.ingredient;
                   const selectedIngredient = ingredients.find((candidate) => candidate._id === selectedIngredientId);
-                  const category = selectedIngredient?.category ?? 'otros';
-                  // Categorías que tradicionalmente usan gramos
-                  const bulkCategories = ['condimentos', 'frutas', 'cereales', 'lacteos', 'otros', 'proteinas', 'vegetales', 'aceites', 'frutos secos', 'dulces'];
-                  const isBulkCategory = category && bulkCategories.includes(category);
-                  const isCoffeeCategory = category === 'cafe';
-                  const productUnit = selectedIngredient?.stockUnit ?? selectedIngredient?.productUnit?.trim();
-                  const purchaseUnit = selectedIngredient?.purchaseUnit?.trim();
-                  const meaningfulProductUnit =
-                    productUnit &&
-                    !['g', 'gramo', 'gramos'].includes(productUnit.toLowerCase());
+                  // Todos los ingredientes usan gramos (stockUnit: 'g')
+                  // Todos los ingredientes usan gramos — siempre mostrar solo "Gramos"
                   const unitOptions = [
                     {
                       value: 'grams',
                       label: 'Gramos',
-                      disabled: !(isBulkCategory || isCoffeeCategory)
-                    },
-                    {
-                      value: 'unit',
-                      label: 'Unidades',
-                      disabled: isBulkCategory || isCoffeeCategory
-                    },
-                    ...(meaningfulProductUnit
-                      ? [
-                        {
-                          value: 'product',
-                          label: productUnit,
-                          disabled: false
-                        }
-                      ]
-                      : []),
-                    ...(purchaseUnit
-                      ? [
-                        {
-                          value: 'purchase',
-                          label: purchaseUnit,
-                          disabled: false
-                        }
-                      ]
-                      : [])
+                      disabled: false
+                    }
                   ];
                   return (
                     <TextField
@@ -392,15 +349,8 @@ const ManualWastageForm = ({ onSubmitted }: Props) => {
                       const selectedIngredient = ingredients.find((candidate) => candidate._id === selectedIngredientId);
                       const unitValue = watchedItems?.[index]?.unit ?? 'grams';
                       if (!selectedIngredient) return 'g';
-                      if (unitValue === 'product') {
-                        return selectedIngredient.productUnit ?? selectedIngredient.purchaseUnit ?? 'u';
-                      }
-                      if (unitValue === 'purchase') {
-                        return selectedIngredient.purchaseUnit ?? 'u';
-                      }
-                      if (unitValue === 'unit') {
-                        return 'unidades';
-                      }
+                      // Todos los ingredientes usan gramos
+                      void unitValue;
                       return 'g';
                     })()})`}
                     type="number"

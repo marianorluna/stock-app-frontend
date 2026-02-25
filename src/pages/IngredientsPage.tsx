@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Autocomplete,
+  Box,
   Button,
   Card,
   CardContent,
@@ -11,53 +12,143 @@ import {
   DialogContent,
   DialogTitle,
   Grid,
+  MenuItem,
   Stack,
   TextField,
   Typography,
-  MenuItem,
   InputAdornment
 } from '@mui/material';
-import { useForm, Controller } from 'react-hook-form';
+import { useForm, Controller, useWatch } from 'react-hook-form';
 import { useInventoryStore } from '../hooks/useInventoryStore';
 import apiClient from '../services/apiClient';
 import type { Ingredient } from '../types';
-import { useAuth } from '../contexts/AuthContext';
 import { RequirePermission } from '../components/auth/RequirePermission';
 import SearchIcon from '@mui/icons-material/Search';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import TagIcon from '@mui/icons-material/Tag';
+
+// Mapeo categoryName → elemento SKU (según SKU_ELEMENTS.md, sección Ingredientes)
+const CATEGORY_ELEMENT_MAP: Record<string, string> = {
+  'Lacteos':      'LV',
+  'Cereales':     'GR',
+  'Condimentos':  'CO',
+  'Vegetales':    'VG',
+  'Frutas':       'FR',
+  'Proteinas':    'PR',
+  'Gases':        'GS',
+  'Bebidas':      'BE',
+  'Cafe':         'CF',
+  'Aceites':      'AC',
+  'Frutos secos': 'FS',
+  'Dulces':       'DL'
+};
+
+const INGREDIENT_CATEGORIES = Object.keys(CATEGORY_ELEMENT_MAP);
+
+// Genera un código de 3 letras a partir del nombre (primeras 3 letras significativas)
+const nameToCode = (name: string): string => {
+  const cleaned = name.replace(/[^a-zA-Z]/g, '').toUpperCase();
+  return cleaned.substring(0, 3).padEnd(3, 'X');
+};
+
+// Genera un SKU único y correlativo para un ingrediente
+const generateIngredientSku = (
+  categoryName: string,
+  name: string,
+  existingSkus: string[]
+): string => {
+  const element = CATEGORY_ELEMENT_MAP[categoryName];
+  if (!element || !name.trim()) return '';
+
+  const prefix = `I${element}`;
+
+  // Extraer números existentes para este elemento (formato: I[EL][4 dígitos][3 letras])
+  const existingNumbers = existingSkus
+    .filter((sku) => sku.startsWith(prefix) && sku.length === 10)
+    .map((sku) => parseInt(sku.substring(3, 7), 10))
+    .filter((n) => !isNaN(n));
+
+  const maxNumber = existingNumbers.length > 0 ? Math.max(...existingNumbers) : 0;
+  const nextNumber = maxNumber + 10;
+  const paddedNumber = String(nextNumber).padStart(4, '0');
+  const code = nameToCode(name);
+
+  const candidate = `${prefix}${paddedNumber}${code}`;
+
+  // Si el candidato ya existe (por coincidencia de código), seguir incrementando
+  if (existingSkus.includes(candidate)) {
+    const fallbackNumber = nextNumber + 1; // usa reservado +1
+    return `${prefix}${String(fallbackNumber).padStart(4, '0')}${code}`;
+  }
+
+  return candidate;
+};
 
 type IngredientFormValues = {
   name: string;
-  sku: string;
+  categoryName: string;
   stock: number;
-  stockUnit: 'u' | 'g' | 'ml';
-  purchaseUnit: string;
-  conversionFactor: number;
-  conversionUnit: 'u' | 'g' | 'ml';
   reorderPoint: number;
-  category: 'bebida' | 'cafe' | 'condimentos' | 'frutas' | 'cereales' | 'lacteos' | 'otros' | 'proteinas' | 'vegetales' | 'aceites' | 'frutos secos' | 'gases' | 'dulces';
   allergens: string[];
   codeArticlePurchase: string;
 };
 
 const defaultValues: IngredientFormValues = {
   name: '',
-  sku: '',
+  categoryName: '',
   stock: 0,
-  stockUnit: 'g',
-  purchaseUnit: 'unidad',
-  conversionFactor: 1,
-  conversionUnit: 'g',
   reorderPoint: 0,
-  category: 'otros',
   allergens: [],
   codeArticlePurchase: ''
 };
 
+const commonAllergens = ['huevo', 'lacteos', 'gluten', 'frutos secos', 'pescado'];
+
+// Sub-componente para preview del SKU (se actualiza reactivamente)
+const SkuPreview = ({
+  control,
+  existingSkus,
+  editSku
+}: {
+  control: ReturnType<typeof useForm<IngredientFormValues>>['control'];
+  existingSkus: string[];
+  editSku?: string;
+}) => {
+  const name = useWatch({ control, name: 'name' });
+  const categoryName = useWatch({ control, name: 'categoryName' });
+
+  const sku = editSku ?? generateIngredientSku(categoryName, name, existingSkus);
+
+  if (!sku) return null;
+
+  return (
+    <Box
+      sx={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 1,
+        px: 2,
+        py: 1,
+        bgcolor: 'action.hover',
+        borderRadius: 1,
+        border: '1px solid',
+        borderColor: 'divider'
+      }}
+    >
+      <TagIcon fontSize="small" color="primary" />
+      <Typography variant="body2" color="text.secondary">
+        SKU generado:
+      </Typography>
+      <Typography variant="body2" fontWeight={700} fontFamily="monospace">
+        {sku}
+      </Typography>
+    </Box>
+  );
+};
+
 const IngredientsPage = () => {
-  const { hasPermission } = useAuth();
   const { ingredients, fetchIngredients, error } = useInventoryStore((state) => ({
     ingredients: state.ingredients,
     fetchIngredients: state.fetchIngredients,
@@ -68,28 +159,28 @@ const IngredientsPage = () => {
   const [selectedIngredient, setSelectedIngredient] = useState<Ingredient | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<Ingredient | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+
   const {
     register,
     handleSubmit,
     reset,
     control,
+    getValues,
     formState: { isSubmitting }
   } = useForm<IngredientFormValues>({ defaultValues });
-
-  // Alérgenos comunes basados en los datos existentes
-  const commonAllergens = ['huevo', 'lacteos', 'gluten', 'frutos secos', 'pescado'];
 
   useEffect(() => {
     void fetchIngredients();
   }, [fetchIngredients]);
 
+  const existingSkus = useMemo(() => ingredients.map((i) => i.sku).filter(Boolean), [ingredients]);
+
   const filteredIngredients = useMemo(() => {
     const normalizedTerm = searchTerm.trim().toLowerCase();
-    // Filtrar categorías que tradicionalmente eran "ingredient"
-    const ingredientCategories = ['condimentos', 'frutas', 'cereales', 'lacteos', 'otros', 'proteinas', 'vegetales', 'aceites', 'frutos secos', 'gases', 'dulces', 'cafe'];
-    return ingredients
-      .filter((ingredient) => ingredientCategories.includes(ingredient.category))
-      .filter((ingredient) => ingredient.name.toLowerCase().includes(normalizedTerm));
+    if (!normalizedTerm) return ingredients;
+    return ingredients.filter((ingredient) =>
+      ingredient.name.toLowerCase().includes(normalizedTerm)
+    );
   }, [ingredients, searchTerm]);
 
   const handleOpen = () => {
@@ -104,14 +195,9 @@ const IngredientsPage = () => {
     setSelectedIngredient(ingredient);
     reset({
       name: ingredient.name,
-      sku: ingredient.sku ?? '',
+      categoryName: ingredient.categoryName ?? '',
       stock: ingredient.stock,
-      stockUnit: ingredient.stockUnit ?? 'g',
-      purchaseUnit: ingredient.purchaseUnit ?? 'unidad',
-      conversionFactor: ingredient.conversionFactor ?? 1,
-      conversionUnit: ingredient.conversionUnit ?? 'g',
       reorderPoint: ingredient.reorderPoint ?? 0,
-      category: ingredient.category ?? 'otros',
       allergens: ingredient.allergens ?? [],
       codeArticlePurchase: ingredient.codeArticlePurchase ?? ''
     });
@@ -123,14 +209,9 @@ const IngredientsPage = () => {
     setSelectedIngredient(ingredient);
     reset({
       name: `${ingredient.name} (copia)`,
-      sku: `${ingredient.sku ?? ''}-COPY`,
+      categoryName: ingredient.categoryName ?? '',
       stock: ingredient.stock,
-      stockUnit: ingredient.stockUnit ?? 'g',
-      purchaseUnit: ingredient.purchaseUnit ?? 'unidad',
-      conversionFactor: ingredient.conversionFactor ?? 1,
-      conversionUnit: ingredient.conversionUnit ?? 'g',
       reorderPoint: ingredient.reorderPoint ?? 0,
-      category: ingredient.category ?? 'otros',
       allergens: ingredient.allergens ?? [],
       codeArticlePurchase: ingredient.codeArticlePurchase ?? ''
     });
@@ -155,9 +236,21 @@ const IngredientsPage = () => {
 
   const onSubmit = handleSubmit(async (values) => {
     if (dialogMode === 'edit' && selectedIngredient) {
-      await apiClient.put<Ingredient>(`/ingredients/${selectedIngredient._id}`, values);
+      // En edición: no cambiar el SKU
+      await apiClient.put<Ingredient>(`/ingredients/${selectedIngredient._id}`, {
+        name: values.name,
+        stock: values.stock,
+        reorderPoint: values.reorderPoint,
+        allergens: values.allergens,
+        codeArticlePurchase: values.codeArticlePurchase
+      });
     } else {
-      await apiClient.post<Ingredient>('/ingredients', values);
+      // En creación / duplicación: generar SKU automáticamente
+      const sku = generateIngredientSku(values.categoryName, values.name, existingSkus);
+      if (!sku) {
+        return; // No debería ocurrir si la validación funciona
+      }
+      await apiClient.post<Ingredient>('/ingredients', { ...values, sku });
     }
     setOpen(false);
     setSelectedIngredient(null);
@@ -169,7 +262,9 @@ const IngredientsPage = () => {
       ? 'Editar ingrediente'
       : dialogMode === 'duplicate'
       ? 'Duplicar ingrediente'
-      : 'Nuevo ingrediente';
+      : 'Crear nuevo ingrediente';
+
+  const isEditMode = dialogMode === 'edit';
 
   return (
     <Grid container spacing={3} sx={{ py: 0 }}>
@@ -178,7 +273,7 @@ const IngredientsPage = () => {
           <Typography variant="h4">Ingredientes</Typography>
           <RequirePermission resource="ingredients" action="create" hide>
             <Button variant="contained" onClick={handleOpen}>
-              Nuevo ingrediente
+              Crear Nuevo
             </Button>
           </RequirePermission>
         </Stack>
@@ -214,15 +309,10 @@ const IngredientsPage = () => {
             <CardContent>
               <Typography variant="h6">{ingredient.description ?? ingredient.name}</Typography>
               <Typography variant="body2" color="text.secondary">
-                Categoría: Ingrediente
+                {ingredient.categoryName ?? '—'} · <Typography component="span" variant="body2" fontFamily="monospace">{ingredient.sku}</Typography>
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                Stock: {ingredient.stock}{' '}
-                {ingredient.stockUnit ?? ingredient.productUnit ?? 'g'}
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                Punto de pedido: {ingredient.reorderPoint}{' '}
-                {ingredient.stockUnit ?? ingredient.productUnit ?? 'g'}
+                Stock: {ingredient.stock} g · Pedido: {ingredient.reorderPoint} g
               </Typography>
               <Stack direction="row" spacing={1.5} sx={{ mt: 2 }}>
                 <RequirePermission resource="ingredients" action="update" hide>
@@ -263,37 +353,58 @@ const IngredientsPage = () => {
         <DialogTitle>{dialogTitle}</DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ mt: 1 }}>
-            <TextField label="Nombre" {...register('name', { required: true })} />
-            <TextField label="SKU" {...register('sku', { required: true })} />
-            <TextField label="Stock inicial" type="number" {...register('stock', { valueAsNumber: true })} />
-            <TextField label="Unidad de stock" select {...register('stockUnit', { required: true })}>
-              <MenuItem value="u">Unidades (u)</MenuItem>
-              <MenuItem value="g">Gramos (g)</MenuItem>
-              <MenuItem value="ml">Mililitros (ml)</MenuItem>
-            </TextField>
-            <TextField label="Unidad de compra" {...register('purchaseUnit', { required: true })} />
-            <TextField label="Factor de conversión" type="number" {...register('conversionFactor', { valueAsNumber: true, required: true })} />
-            <TextField label="Unidad de conversión" select {...register('conversionUnit', { required: true })}>
-              <MenuItem value="u">Unidades (u)</MenuItem>
-              <MenuItem value="g">Gramos (g)</MenuItem>
-              <MenuItem value="ml">Mililitros (ml)</MenuItem>
-            </TextField>
-            <TextField label="Punto de pedido" type="number" {...register('reorderPoint', { valueAsNumber: true })} />
-            <TextField label="Categoría" select {...register('category', { required: true })}>
-              <MenuItem value="bebida">Bebida</MenuItem>
-              <MenuItem value="cafe">Café</MenuItem>
-              <MenuItem value="condimentos">Condimentos</MenuItem>
-              <MenuItem value="frutas">Frutas</MenuItem>
-              <MenuItem value="cereales">Cereales</MenuItem>
-              <MenuItem value="lacteos">Lácteos</MenuItem>
-              <MenuItem value="otros">Otros</MenuItem>
-              <MenuItem value="proteinas">Proteínas</MenuItem>
-              <MenuItem value="vegetales">Vegetales</MenuItem>
-              <MenuItem value="aceites">Aceites</MenuItem>
-              <MenuItem value="frutos secos">Frutos secos</MenuItem>
-              <MenuItem value="gases">Gases</MenuItem>
-              <MenuItem value="dulces">Dulces</MenuItem>
-            </TextField>
+            <TextField
+              label="Nombre"
+              {...register('name', { required: true })}
+            />
+            {isEditMode ? (
+              // En edición: mostrar SKU y categoría como solo lectura
+              <Stack spacing={2}>
+                <TextField
+                  label="Categoría"
+                  value={getValues('categoryName')}
+                  InputProps={{ readOnly: true }}
+                  helperText="La categoría no se puede cambiar sin modificar el SKU"
+                />
+                <TextField
+                  label="SKU"
+                  value={selectedIngredient?.sku ?? ''}
+                  InputProps={{ readOnly: true }}
+                  helperText="El SKU es inmutable"
+                />
+              </Stack>
+            ) : (
+              // En creación / duplicación: selector de categoría + preview SKU
+              <Stack spacing={2}>
+                <TextField
+                  select
+                  label="Categoría *"
+                  defaultValue=""
+                  {...register('categoryName', { required: true })}
+                  helperText="La categoría determina el elemento del SKU"
+                >
+                  {INGREDIENT_CATEGORIES.map((cat) => (
+                    <MenuItem key={cat} value={cat}>
+                      {cat} <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 1 }}>({CATEGORY_ELEMENT_MAP[cat]})</Typography>
+                    </MenuItem>
+                  ))}
+                </TextField>
+                <SkuPreview
+                  control={control}
+                  existingSkus={existingSkus}
+                />
+              </Stack>
+            )}
+            <TextField
+              label="Stock inicial (g)"
+              type="number"
+              {...register('stock', { valueAsNumber: true })}
+            />
+            <TextField
+              label="Punto de pedido (g)"
+              type="number"
+              {...register('reorderPoint', { valueAsNumber: true })}
+            />
             <Controller
               control={control}
               name="allergens"
@@ -303,9 +414,7 @@ const IngredientsPage = () => {
                   freeSolo
                   options={commonAllergens}
                   value={value || []}
-                  onChange={(_, newValue) => {
-                    onChange(newValue);
-                  }}
+                  onChange={(_, newValue) => onChange(newValue)}
                   renderTags={(value, getTagProps) =>
                     value.map((option, index) => (
                       <Chip
@@ -336,6 +445,7 @@ const IngredientsPage = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
       <Dialog open={Boolean(confirmDelete)} onClose={() => setConfirmDelete(null)} maxWidth="xs" fullWidth>
         <DialogTitle>Confirmar eliminación</DialogTitle>
         <DialogContent>
@@ -355,4 +465,3 @@ const IngredientsPage = () => {
 };
 
 export default IngredientsPage;
-
