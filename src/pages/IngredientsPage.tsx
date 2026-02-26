@@ -26,23 +26,22 @@ import { RequirePermission } from '../components/auth/RequirePermission';
 import SearchIcon from '@mui/icons-material/Search';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
-import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import TagIcon from '@mui/icons-material/Tag';
 
 // Mapeo categoryName → elemento SKU (según SKU_ELEMENTS.md, sección Ingredientes)
 const CATEGORY_ELEMENT_MAP: Record<string, string> = {
-  'Lacteos':      'LV',
-  'Cereales':     'GR',
-  'Condimentos':  'CO',
-  'Vegetales':    'VG',
-  'Frutas':       'FR',
-  'Proteinas':    'PR',
-  'Gases':        'GS',
-  'Bebidas':      'BE',
-  'Cafe':         'CF',
-  'Aceites':      'AC',
+  'Lacteos': 'LV',
+  'Cereales': 'GR',
+  'Condimentos': 'CO',
+  'Vegetales': 'VG',
+  'Frutas': 'FR',
+  'Proteinas': 'PR',
+  'Gases': 'GS',
+  'Bebidas': 'BE',
+  'Cafe': 'CF',
+  'Aceites': 'AC',
   'Frutos secos': 'FS',
-  'Dulces':       'DL'
+  'Dulces': 'DL'
 };
 
 const INGREDIENT_CATEGORIES = Object.keys(CATEGORY_ELEMENT_MAP);
@@ -155,7 +154,7 @@ const IngredientsPage = () => {
     error: state.error
   }));
   const [open, setOpen] = useState(false);
-  const [dialogMode, setDialogMode] = useState<'create' | 'edit' | 'duplicate'>('create');
+  const [dialogMode, setDialogMode] = useState<'create' | 'edit'>('create');
   const [selectedIngredient, setSelectedIngredient] = useState<Ingredient | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<Ingredient | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -204,20 +203,6 @@ const IngredientsPage = () => {
     setOpen(true);
   };
 
-  const handleDuplicate = (ingredient: Ingredient) => {
-    setDialogMode('duplicate');
-    setSelectedIngredient(ingredient);
-    reset({
-      name: `${ingredient.name} (copia)`,
-      categoryName: ingredient.categoryName ?? '',
-      stock: ingredient.stock,
-      reorderPoint: ingredient.reorderPoint ?? 0,
-      allergens: ingredient.allergens ?? [],
-      codeArticlePurchase: ingredient.codeArticlePurchase ?? ''
-    });
-    setOpen(true);
-  };
-
   const handleDelete = (ingredient: Ingredient) => {
     setConfirmDelete(ingredient);
   };
@@ -257,12 +242,7 @@ const IngredientsPage = () => {
     await fetchIngredients();
   });
 
-  const dialogTitle =
-    dialogMode === 'edit'
-      ? 'Editar ingrediente'
-      : dialogMode === 'duplicate'
-      ? 'Duplicar ingrediente'
-      : 'Crear nuevo ingrediente';
+  const dialogTitle = dialogMode === 'edit' ? 'Editar ingrediente' : 'Crear nuevo ingrediente';
 
   const isEditMode = dialogMode === 'edit';
 
@@ -312,7 +292,7 @@ const IngredientsPage = () => {
                 {ingredient.categoryName ?? '—'} · <Typography component="span" variant="body2" fontFamily="monospace">{ingredient.sku}</Typography>
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                Stock: {ingredient.stock} g · Pedido: {ingredient.reorderPoint} g
+                Punto de pedido: {ingredient.reorderPoint} g
               </Typography>
               <Stack direction="row" spacing={1.5} sx={{ mt: 2 }}>
                 <RequirePermission resource="ingredients" action="update" hide>
@@ -322,15 +302,6 @@ const IngredientsPage = () => {
                     onClick={() => handleEdit(ingredient)}
                   >
                     Editar
-                  </Button>
-                </RequirePermission>
-                <RequirePermission resource="ingredients" action="create" hide>
-                  <Button
-                    size="small"
-                    startIcon={<ContentCopyIcon fontSize="small" />}
-                    onClick={() => handleDuplicate(ingredient)}
-                  >
-                    Duplicar
                   </Button>
                 </RequirePermission>
                 <RequirePermission resource="ingredients" action="delete" hide>

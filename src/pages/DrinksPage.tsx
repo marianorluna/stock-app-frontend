@@ -26,15 +26,14 @@ import SearchIcon from '@mui/icons-material/Search';
 import type { Beverage } from '../types';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
-import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import TagIcon from '@mui/icons-material/Tag';
 
 // Mapeo categoryName → elemento SKU (según SKU_ELEMENTS.md, sección Bebidas)
 const CATEGORY_ELEMENT_MAP: Record<string, string> = {
-  'Bebidas':         'BD',
-  'Copa de vino':    'CV',
-  'Bebida premium':  'BP',
-  'Botella':         'BT'
+  'Bebidas': 'BD',
+  'Copa de vino': 'CV',
+  'Bebida premium': 'BP',
+  'Botella': 'BT'
 };
 
 const BEVERAGE_CATEGORIES = Object.keys(CATEGORY_ELEMENT_MAP);
@@ -149,7 +148,7 @@ const DrinksPage = () => {
   }));
 
   const [open, setOpen] = useState(false);
-  const [dialogMode, setDialogMode] = useState<'create' | 'edit' | 'duplicate'>('create');
+  const [dialogMode, setDialogMode] = useState<'create' | 'edit'>('create');
   const [selectedDrink, setSelectedDrink] = useState<Beverage | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<Beverage | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -201,20 +200,6 @@ const DrinksPage = () => {
     setOpen(true);
   };
 
-  const handleDuplicate = (drink: Beverage) => {
-    setDialogMode('duplicate');
-    setSelectedDrink(drink);
-    reset({
-      name: `${drink.name} (copia)`,
-      categoryName: drink.categoryName ?? '',
-      stock: drink.stock,
-      reorderPoint: drink.reorderPoint ?? 0,
-      allergens: drink.allergens ?? [],
-      codeArticlePurchase: drink.codeArticlePurchase ?? ''
-    });
-    setOpen(true);
-  };
-
   const handleDelete = (drink: Beverage) => {
     setConfirmDelete(drink);
   };
@@ -237,7 +222,7 @@ const DrinksPage = () => {
         codeArticlePurchase: values.codeArticlePurchase
       });
     } else {
-      // En creación / duplicación: generar SKU automáticamente
+      // En creación: generar SKU automáticamente
       const sku = generateBeverageSku(values.categoryName, values.name, existingSkus);
       if (!sku) return;
       await apiClient.post<Beverage>('/beverages', { ...values, sku });
@@ -247,12 +232,7 @@ const DrinksPage = () => {
     await fetchBeverages();
   });
 
-  const dialogTitle =
-    dialogMode === 'edit'
-      ? 'Editar bebida'
-      : dialogMode === 'duplicate'
-      ? 'Duplicar bebida'
-      : 'Crear nueva bebida';
+  const dialogTitle = dialogMode === 'edit' ? 'Editar bebida' : 'Crear nueva bebida';
 
   const isEditMode = dialogMode === 'edit';
 
@@ -305,7 +285,7 @@ const DrinksPage = () => {
                 {drink.categoryName ?? '—'} · <Typography component="span" variant="body2" fontFamily="monospace">{drink.sku}</Typography>
               </Typography>
               <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                Stock: {drink.stock} ml · Pedido: {drink.reorderPoint} ml
+                Punto de pedido: {drink.reorderPoint} u
               </Typography>
               <Stack direction="row" spacing={1.5} sx={{ mt: 2 }}>
                 <RequirePermission resource="ingredients" action="update" hide>
@@ -315,15 +295,6 @@ const DrinksPage = () => {
                     onClick={() => handleEdit(drink)}
                   >
                     Editar
-                  </Button>
-                </RequirePermission>
-                <RequirePermission resource="ingredients" action="create" hide>
-                  <Button
-                    size="small"
-                    startIcon={<ContentCopyIcon fontSize="small" />}
-                    onClick={() => handleDuplicate(drink)}
-                  >
-                    Duplicar
                   </Button>
                 </RequirePermission>
                 <RequirePermission resource="ingredients" action="delete" hide>
@@ -389,12 +360,12 @@ const DrinksPage = () => {
               </Stack>
             )}
             <TextField
-              label="Stock inicial (ml)"
+              label="Stock inicial (u)"
               type="number"
               {...register('stock', { valueAsNumber: true })}
             />
             <TextField
-              label="Punto de pedido (ml)"
+              label="Punto de pedido (u)"
               type="number"
               {...register('reorderPoint', { valueAsNumber: true })}
             />

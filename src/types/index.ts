@@ -6,6 +6,9 @@ export type InventoryItem = {
   unit: string;
   categoryName: string;
   itemType: 'ingredient' | 'beverage';
+  // Opcionales, solo presentes para ingredientes
+  stockMerma?: number;
+  factorMermaNat?: number;
 };
 
 export type StockSnapshot = {
@@ -44,7 +47,7 @@ export type Beverage = {
   description?: string;
   sku: string;
   stock: number;
-  stockUnit: 'ml';
+  stockUnit: 'u';
   stockUnitName?: string;
   reorderPoint: number;
   categoryName: string;
