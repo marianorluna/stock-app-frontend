@@ -37,11 +37,16 @@ const DashboardPage = () => {
       };
     }
 
+    const effectiveStock = (item: typeof snapshot.inventory[0]) =>
+      (item.factorMermaNat != null && item.factorMermaNat > 0 && item.stockMerma != null)
+        ? item.stockMerma
+        : item.stock;
+
     const ingredientItems = snapshot.inventory?.filter(item => item.itemType === 'ingredient') ?? [];
-    const ingredientLowStock = ingredientItems.filter(item => item.stock <= item.reorderPoint).length;
+    const ingredientLowStock = ingredientItems.filter(item => effectiveStock(item) <= item.reorderPoint).length;
 
     const beverageItems = snapshot.inventory?.filter(item => item.itemType === 'beverage') ?? [];
-    const beverageLowStock = beverageItems.filter(item => item.stock <= item.reorderPoint).length;
+    const beverageLowStock = beverageItems.filter(item => effectiveStock(item) <= item.reorderPoint).length;
 
     return {
       ingredients: {
@@ -68,7 +73,10 @@ const DashboardPage = () => {
 
     const aggregated = snapshot.inventory.reduce<Record<string, number>>((acc, item) => {
       const key = item.itemType;
-      acc[key] = (acc[key] ?? 0) + item.stock;
+      const eff = (item.factorMermaNat != null && item.factorMermaNat > 0 && item.stockMerma != null)
+        ? item.stockMerma
+        : item.stock;
+      acc[key] = (acc[key] ?? 0) + eff;
       return acc;
     }, {});
 
@@ -98,11 +106,18 @@ const DashboardPage = () => {
     }
 
     const inventory = snapshot.inventory;
+
+    const getEff = (item: typeof inventory[0]) =>
+      (item.factorMermaNat != null && item.factorMermaNat > 0 && item.stockMerma != null)
+        ? item.stockMerma
+        : item.stock;
+
     const counters = inventory.reduce(
       (acc, item) => {
-        if (item.stock <= 0) {
+        const eff = getEff(item);
+        if (eff <= 0) {
           acc.critical += 1;
-        } else if (item.stock <= item.reorderPoint) {
+        } else if (eff <= item.reorderPoint) {
           acc.warning += 1;
         } else {
           acc.healthy += 1;
@@ -119,7 +134,7 @@ const DashboardPage = () => {
       critical: Math.round((counters.critical / total) * 100)
     };
 
-    const highlights = inventory.filter((item) => item.stock <= item.reorderPoint).slice(0, 5);
+    const highlights = inventory.filter((item) => getEff(item) <= item.reorderPoint).slice(0, 5);
 
     return { ...counters, ratios, highlights };
   }, [snapshot]);
@@ -332,7 +347,7 @@ const DashboardPage = () => {
                         {item.name}
                       </Typography>
                       <Typography variant="caption" color="text.secondary">
-                        Stock {item.stock} / Punto {item.reorderPoint} {item.unit}
+                        Stock Real {(item.factorMermaNat != null && item.factorMermaNat > 0 && item.stockMerma != null) ? item.stockMerma : item.stock} / Punto {item.reorderPoint} {item.unit}
                       </Typography>
                     </Stack>
                   ))}
@@ -452,7 +467,7 @@ const DashboardPage = () => {
                         {item.name}
                       </Typography>
                       <Typography variant="caption" color="text.secondary">
-                        Stock actual: {item.stock} {item.unit} • Punto de pedido: {item.reorderPoint} {item.unit}
+                        Stock Real: {(item.factorMermaNat != null && item.factorMermaNat > 0 && item.stockMerma != null) ? item.stockMerma : item.stock} {item.unit} • Punto de pedido: {item.reorderPoint} {item.unit}
                       </Typography>
                     </Stack>
                   ))}

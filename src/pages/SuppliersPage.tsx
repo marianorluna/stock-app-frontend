@@ -10,12 +10,9 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
-  FormControl,
   Grid,
   InputAdornment,
-  InputLabel,
   MenuItem,
-  Select,
   Stack,
   TextField,
   Typography
@@ -23,7 +20,6 @@ import {
 import SearchIcon from '@mui/icons-material/Search';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
-import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import TagIcon from '@mui/icons-material/Tag';
 import { useForm, Controller, useWatch } from 'react-hook-form';
 import apiClient from '../services/apiClient';
@@ -170,11 +166,10 @@ const SuppliersPage = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [dialogMode, setDialogMode] = useState<'create' | 'edit' | 'duplicate'>('edit');
+  const [dialogMode, setDialogMode] = useState<'create' | 'edit'>('edit');
   const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<Supplier | null>(null);
   const [processing, setProcessing] = useState(false);
-  const [duplicateTargetSku, setDuplicateTargetSku] = useState<string>('');
 
   const {
     control,
@@ -213,7 +208,6 @@ const SuppliersPage = () => {
     setDialogMode('create');
     setSelectedSupplier(null);
     reset(defaultValues);
-    setDuplicateTargetSku('');
     setDialogOpen(true);
   };
 
@@ -232,26 +226,6 @@ const SuppliersPage = () => {
       contact: supplier.contact || '',
       email: supplier.email || ''
     });
-    setDuplicateTargetSku('');
-    setDialogOpen(true);
-  };
-
-  const handleDuplicate = (supplier: Supplier) => {
-    setSelectedSupplier(supplier);
-    setDialogMode('duplicate');
-    reset({
-      categoryName: '', // Resetear para generar nuevo SKU
-      name: '',
-      nif: '',
-      address: '',
-      city: '',
-      zip: '',
-      country: '',
-      tel: '',
-      contact: '',
-      email: ''
-    });
-    setDuplicateTargetSku('');
     setDialogOpen(true);
   };
 
@@ -270,7 +244,6 @@ const SuppliersPage = () => {
     setDialogOpen(false);
     setSelectedSupplier(null);
     reset(defaultValues);
-    setDuplicateTargetSku('');
     setProcessing(false);
   };
 
@@ -321,22 +294,6 @@ const SuppliersPage = () => {
       setProcessing(false);
     }
   });
-
-  const handleDuplicateSubmit = async () => {
-    if (!selectedSupplier || !duplicateTargetSku.trim()) return;
-    setProcessing(true);
-    try {
-      const encodedSku = encodeURIComponent(selectedSupplier.sku);
-      await apiClient.post(`/suppliers/${encodedSku}/duplicate`, { newSku: duplicateTargetSku.trim() });
-      handleDialogClose();
-      await fetchSuppliers();
-    } catch (error) {
-      setError('Error al procesar la solicitud');
-      setProcessing(false);
-    }
-  };
-
-  const duplicateTargetOptions = suppliers.filter((s) => s.sku !== selectedSupplier?.sku);
 
   const isEditMode = dialogMode === 'edit';
 
@@ -418,15 +375,6 @@ const SuppliersPage = () => {
                     Editar
                   </Button>
                 </RequirePermission>
-                <RequirePermission resource="suppliers" action="create" hide>
-                  <Button
-                    size="small"
-                    startIcon={<ContentCopyIcon fontSize="small" />}
-                    onClick={() => handleDuplicate(supplier)}
-                  >
-                    Duplicar
-                  </Button>
-                </RequirePermission>
                 <RequirePermission resource="suppliers" action="delete" hide>
                   <Button
                     size="small"
@@ -445,15 +393,10 @@ const SuppliersPage = () => {
 
       <Dialog open={dialogOpen} onClose={handleDialogClose} fullWidth maxWidth="sm">
         <DialogTitle>
-          {dialogMode === 'create'
-            ? 'Crear nuevo proveedor'
-            : dialogMode === 'edit'
-              ? 'Editar proveedor'
-              : 'Duplicar compras a proveedor'}
+          {dialogMode === 'create' ? 'Crear nuevo proveedor' : 'Editar proveedor'}
         </DialogTitle>
         <DialogContent>
-          {dialogMode === 'create' || dialogMode === 'edit' ? (
-            <Stack spacing={2} sx={{ mt: 1 }}>
+          <Stack spacing={2} sx={{ mt: 1 }}>
               {isEditMode ? (
                 // En edición: mostrar SKU como solo lectura
                 <TextField
@@ -545,55 +488,17 @@ const SuppliersPage = () => {
                 render={({ field }) => <TextField label="Email" type="email" {...field} />}
               />
             </Stack>
-          ) : (
-            <>
-              <FormControl fullWidth margin="dense">
-                <InputLabel id="duplicate-target">Proveedor destino</InputLabel>
-                <Select
-                  labelId="duplicate-target"
-                  label="Proveedor destino"
-                  value={duplicateTargetSku}
-                  onChange={(event) => setDuplicateTargetSku(event.target.value)}
-                >
-                  {duplicateTargetOptions.map((s) => (
-                    <MenuItem key={s.sku} value={s.sku}>
-                      {s.name} ({s.sku})
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-              {duplicateTargetOptions.length === 0 ? (
-                <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-                  No hay otros proveedores para copiar las compras.
-                </Typography>
-              ) : (
-                <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-                  Se copiarán las compras de &quot;{selectedSupplier?.name}&quot; al proveedor seleccionado.
-                </Typography>
-              )}
-            </>
-          )}
         </DialogContent>
         <DialogActions>
           <Button onClick={handleDialogClose} disabled={processing || isSubmitting}>
             Cancelar
           </Button>
           <Button
-            onClick={dialogMode === 'duplicate' ? handleDuplicateSubmit : onSubmit}
+            onClick={onSubmit}
             variant="contained"
-            disabled={
-              processing ||
-              isSubmitting ||
-              (dialogMode === 'duplicate'
-                ? !duplicateTargetSku.trim() || duplicateTargetOptions.length === 0
-                : false)
-            }
+            disabled={processing || isSubmitting}
           >
-            {dialogMode === 'create'
-              ? 'Crear'
-              : dialogMode === 'edit'
-                ? 'Guardar cambios'
-                : 'Duplicar'}
+            {dialogMode === 'create' ? 'Crear' : 'Guardar cambios'}
           </Button>
         </DialogActions>
       </Dialog>

@@ -28,20 +28,26 @@ const StockActualPage = () => {
 
   const inventoryList = useMemo(() => {
     if (!snapshot) return [];
-    
+
     let filtered = [...snapshot.inventory];
-    
+
     // Filtrar por tipo si se especifica
     if (itemType === 'ingredient') {
       filtered = filtered.filter(item => item.itemType === 'ingredient');
     } else if (itemType === 'beverage') {
       filtered = filtered.filter(item => item.itemType === 'beverage');
     }
-    
-    // Ordenar: primero los que están por debajo del punto de pedido
+
+    // Calcular stock efectivo: si tiene merma, usar stockMerma; si no, usar stock
+    const effectiveStock = (item: typeof filtered[0]) =>
+      (item.factorMermaNat != null && item.factorMermaNat > 0 && item.stockMerma != null)
+        ? item.stockMerma
+        : item.stock;
+
+    // Ordenar: primero los que están por debajo del punto de pedido (usando stock efectivo)
     return filtered.sort((a, b) => {
-      const aLow = a.stock <= a.reorderPoint ? 1 : 0;
-      const bLow = b.stock <= b.reorderPoint ? 1 : 0;
+      const aLow = effectiveStock(a) <= a.reorderPoint ? 1 : 0;
+      const bLow = effectiveStock(b) <= b.reorderPoint ? 1 : 0;
       if (aLow !== bLow) return bLow - aLow;
       return a.name.localeCompare(b.name);
     });
@@ -104,36 +110,55 @@ const StockActualPage = () => {
         <Typography>Sin datos disponibles aún.</Typography>
       ) : (
         <Grid container spacing={2}>
-          {inventoryList.map((item) => (
-            <Grid key={item.id} item xs={12} sm={6} md={4}>
-              <Card
-                variant="outlined"
-                sx={{ 
-                  borderColor: item.stock <= item.reorderPoint ? 'error.main' : 'divider',
-                  height: '100%'
-                }}
-              >
-                <CardContent>
-                  <Stack spacing={1}>
-                    <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase' }}>
-                      {item.categoryName}
-                    </Typography>
-                    <Typography variant="subtitle1" fontWeight={600}>
-                      {item.name}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      Stock: {item.stock} {item.unit}
-                    </Typography>
-                    {item.stock <= item.reorderPoint && (
-                      <Typography variant="caption" color="error">
-                        Punto de pedido: {item.reorderPoint} {item.unit}
+          {inventoryList.map((item) => {
+            const hasMerma = typeof item.factorMermaNat === 'number' && item.factorMermaNat > 0;
+            const displayStock = hasMerma && typeof item.stockMerma === 'number'
+              ? item.stockMerma
+              : item.stock;
+            const isLow = displayStock <= item.reorderPoint;
+
+            return (
+              <Grid key={item.id} item xs={12} sm={6} md={4}>
+                <Card
+                  variant="outlined"
+                  sx={{
+                    borderColor: isLow ? 'error.main' : 'divider',
+                    bgcolor: isLow ? '#fef2f2' : 'background.paper',
+                    height: '100%'
+                  }}
+                >
+                  <CardContent>
+                    <Stack spacing={1}>
+                      <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase' }}>
+                        {item.categoryName}
                       </Typography>
-                    )}
-                  </Stack>
-                </CardContent>
-              </Card>
-            </Grid>
-          ))}
+                      <Typography variant="subtitle1" fontWeight={600}>
+                        {item.name}
+                      </Typography>
+                      <Stack direction="row" spacing={1.5} alignItems="center">
+                        <Typography variant="body2" color="text.secondary">
+                          Stock Real: {displayStock} {item.unit}
+                        </Typography>
+                        {hasMerma && (
+                          <>
+                            <Typography variant="body2" color="text.secondary">·</Typography>
+                            <Typography variant="body2" color="text.secondary">
+                              Merma: {Math.round((item.factorMermaNat ?? 0) * 100)}%
+                            </Typography>
+                          </>
+                        )}
+                      </Stack>
+                      {isLow && (
+                        <Typography variant="caption" color="error">
+                          Punto de pedido: {item.reorderPoint} {item.unit}
+                        </Typography>
+                      )}
+                    </Stack>
+                  </CardContent>
+                </Card>
+              </Grid>
+            );
+          })}
         </Grid>
       )}
     </Box>
