@@ -28,9 +28,9 @@ import type { Supplier } from '../types';
 
 // Mapeo categoryName → elemento SKU (según SKU_ELEMENTS.md, sección Proveedores)
 const CATEGORY_ELEMENT_MAP: Record<string, string> = {
-  'All/General':     'GN',
-  'Drinks':          'BB',
-  'Salads/Fresh':    'FR'
+  'All/General': 'GN',
+  'Drinks': 'BB',
+  'Salads/Fresh': 'FR'
 };
 
 const SUPPLIER_CATEGORIES = Object.keys(CATEGORY_ELEMENT_MAP);
@@ -397,97 +397,97 @@ const SuppliersPage = () => {
         </DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ mt: 1 }}>
-              {isEditMode ? (
-                // En edición: mostrar SKU como solo lectura
-                <TextField
-                  label="SKU"
-                  value={selectedSupplier?.sku ?? ''}
-                  InputProps={{ readOnly: true }}
-                  helperText="El SKU es inmutable"
-                />
-              ) : (
-                // En creación / duplicación: selector de categoría + preview SKU
-                <Stack spacing={2}>
-                  <Controller
-                    control={control}
-                    name="categoryName"
-                    rules={{ required: true }}
-                    render={({ field }) => (
-                      <TextField
-                        select
-                        label="Categoría *"
-                        {...field}
-                        helperText="La categoría determina el elemento del SKU"
-                      >
-                        {SUPPLIER_CATEGORIES.map((cat) => (
-                          <MenuItem key={cat} value={cat}>
-                            {cat} <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 1 }}>({CATEGORY_ELEMENT_MAP[cat]})</Typography>
-                          </MenuItem>
-                        ))}
-                      </TextField>
-                    )}
-                  />
-                  <SkuPreview
-                    control={control}
-                    existingSkus={existingSkus}
-                  />
-                </Stack>
-              )}
-              <Controller
-                control={control}
-                name="name"
-                rules={{ required: true }}
-                render={({ field }) => (
-                  <TextField
-                    autoFocus={isEditMode}
-                    label="Nombre del proveedor *"
-                    {...field}
-                  />
-                )}
+            {isEditMode ? (
+              // En edición: mostrar SKU como solo lectura
+              <TextField
+                label="SKU"
+                value={selectedSupplier?.sku ?? ''}
+                InputProps={{ readOnly: true }}
+                helperText="El SKU es inmutable"
               />
-              <Controller
-                control={control}
-                name="nif"
-                render={({ field }) => <TextField label="NIF" {...field} />}
-              />
-              <Controller
-                control={control}
-                name="address"
-                render={({ field }) => <TextField label="Dirección" {...field} />}
-              />
-              <Stack direction="row" spacing={2}>
+            ) : (
+              // En creación / duplicación: selector de categoría + preview SKU
+              <Stack spacing={2}>
                 <Controller
                   control={control}
-                  name="city"
-                  render={({ field }) => <TextField label="Ciudad" fullWidth {...field} />}
+                  name="categoryName"
+                  rules={{ required: true }}
+                  render={({ field }) => (
+                    <TextField
+                      select
+                      label="Categoría *"
+                      {...field}
+                      helperText="La categoría determina el elemento del SKU"
+                    >
+                      {SUPPLIER_CATEGORIES.map((cat) => (
+                        <MenuItem key={cat} value={cat}>
+                          {cat} <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 1 }}>({CATEGORY_ELEMENT_MAP[cat]})</Typography>
+                        </MenuItem>
+                      ))}
+                    </TextField>
+                  )}
                 />
-                <Controller
+                <SkuPreview
                   control={control}
-                  name="zip"
-                  render={({ field }) => <TextField label="Código Postal" fullWidth {...field} />}
+                  existingSkus={existingSkus}
                 />
               </Stack>
+            )}
+            <Controller
+              control={control}
+              name="name"
+              rules={{ required: true }}
+              render={({ field }) => (
+                <TextField
+                  autoFocus={isEditMode}
+                  label="Nombre del proveedor *"
+                  {...field}
+                />
+              )}
+            />
+            <Controller
+              control={control}
+              name="nif"
+              render={({ field }) => <TextField label="NIF" {...field} />}
+            />
+            <Controller
+              control={control}
+              name="address"
+              render={({ field }) => <TextField label="Dirección" {...field} />}
+            />
+            <Stack direction="row" spacing={2}>
               <Controller
                 control={control}
-                name="country"
-                render={({ field }) => <TextField label="País" {...field} />}
+                name="city"
+                render={({ field }) => <TextField label="Ciudad" fullWidth {...field} />}
               />
               <Controller
                 control={control}
-                name="tel"
-                render={({ field }) => <TextField label="Teléfono" {...field} />}
-              />
-              <Controller
-                control={control}
-                name="contact"
-                render={({ field }) => <TextField label="Contacto" {...field} />}
-              />
-              <Controller
-                control={control}
-                name="email"
-                render={({ field }) => <TextField label="Email" type="email" {...field} />}
+                name="zip"
+                render={({ field }) => <TextField label="Código Postal" fullWidth {...field} />}
               />
             </Stack>
+            <Controller
+              control={control}
+              name="country"
+              render={({ field }) => <TextField label="País" {...field} />}
+            />
+            <Controller
+              control={control}
+              name="tel"
+              render={({ field }) => <TextField label="Teléfono" {...field} />}
+            />
+            <Controller
+              control={control}
+              name="contact"
+              render={({ field }) => <TextField label="Contacto" {...field} />}
+            />
+            <Controller
+              control={control}
+              name="email"
+              render={({ field }) => <TextField label="Email" type="email" {...field} />}
+            />
+          </Stack>
         </DialogContent>
         <DialogActions>
           <Button onClick={handleDialogClose} disabled={processing || isSubmitting}>

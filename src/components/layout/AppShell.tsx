@@ -20,7 +20,9 @@ import {
   Divider,
   CircularProgress,
   Collapse,
-  Badge
+  Badge,
+  Snackbar,
+  Alert
 } from '@mui/material';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import BarChartIcon from '@mui/icons-material/BarChart';
@@ -45,6 +47,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { RequirePermission } from '../auth/RequirePermission';
 import { useInventoryStore } from '../../hooks/useInventoryStore';
 import apiClient from '../../services/apiClient';
+import socketClient from '../../services/socketClient';
 
 type AppShellProps = {
   children: ReactNode;
@@ -87,9 +90,11 @@ const AppShell = ({ children }: AppShellProps) => {
   const [inventoryMenuOpen, setInventoryMenuOpen] = useState(false);
   const [productsMenuOpen, setProductsMenuOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
-  const { loading, loadingMessage } = useInventoryStore((state) => ({
+  const { loading, loadingMessage, isUpdatingStock, setIsUpdatingStock } = useInventoryStore((state) => ({
     loading: state.loading,
-    loadingMessage: state.loadingMessage
+    loadingMessage: state.loadingMessage,
+    isUpdatingStock: state.isUpdatingStock,
+    setIsUpdatingStock: state.setIsUpdatingStock
   }));
   
   const canAccessInventory = hasAnyRole(['admin', 'manager']);
@@ -128,6 +133,25 @@ const AppShell = ({ children }: AppShellProps) => {
     }
   }, [location.pathname, canAccessInventory, unreadCount]);
   
+  // Escuchar eventos de actualización automática de stock via WebSocket
+  useEffect(() => {
+    const handleStockUpdateStarted = () => {
+      setIsUpdatingStock(true);
+    };
+
+    const handleStockUpdateCompleted = () => {
+      setIsUpdatingStock(false);
+    };
+
+    socketClient.on('stock_update_started', handleStockUpdateStarted);
+    socketClient.on('stock_update_completed', handleStockUpdateCompleted);
+
+    return () => {
+      socketClient.off('stock_update_started', handleStockUpdateStarted);
+      socketClient.off('stock_update_completed', handleStockUpdateCompleted);
+    };
+  }, [setIsUpdatingStock]);
+
   const navLinks = getNavLinks(hasPermission);
   const trailingLinks = getTrailingLinks(hasPermission);
 
@@ -552,6 +576,21 @@ const AppShell = ({ children }: AppShellProps) => {
           )}
         </Box>
       )}
+
+      {/* Toast de actualización automática de stock en curso */}
+      <Snackbar
+        open={isUpdatingStock}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+        sx={{ mb: 2 }}
+      >
+        <Alert
+          severity="info"
+          icon={<CircularProgress size={18} color="inherit" />}
+          sx={{ width: '100%', alignItems: 'center' }}
+        >
+          Actualización automática de stock en curso. Las operaciones manuales están temporalmente bloqueadas.
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };

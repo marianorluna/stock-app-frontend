@@ -34,6 +34,7 @@ type InventoryState = {
   purchasesLog: PurchaseRecord[];
   wastageLog: WastageRecord[];
   wastagePresets: WastagePreset[];
+  isUpdatingStock: boolean;
   fetchSnapshot: () => Promise<void>;
   fetchIngredients: () => Promise<void>;
   fetchBeverages: () => Promise<void>;
@@ -49,6 +50,7 @@ type InventoryState = {
   fetchWastagePresets: () => Promise<void>;
   createWastagePreset: (payload: WastagePresetPayload) => Promise<void>;
   deleteWastagePreset: (presetId: string) => Promise<void>;
+  setIsUpdatingStock: (status: boolean) => void;
 };
 
 let snapshotLongLoadTimer: number | undefined;
@@ -69,6 +71,7 @@ export const useInventoryStore = create<InventoryState>()(
     purchasesLog: [],
     wastageLog: [],
     wastagePresets: [],
+    isUpdatingStock: false,
     //obtiene el snapshot actual del inventario desde el endpoint de inventario
     fetchSnapshot: async () => {
       if (snapshotLongLoadTimer) {
@@ -269,7 +272,8 @@ export const useInventoryStore = create<InventoryState>()(
       set((state) => ({
         wastagePresets: state.wastagePresets.filter((preset) => preset._id !== presetId)
       }));
-    }
+    },
+    setIsUpdatingStock: (status) => set({ isUpdatingStock: status })
   }))
 );
 
