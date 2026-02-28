@@ -87,8 +87,10 @@ export type ManualPurchasePayload = {
 
 export type ManualWastagePayload = {
   items: Array<{
-    ingredient: string;
-    quantityInGrams: number;
+    ingredient?: string;
+    beverage?: string;
+    quantityInGrams?: number;
+    quantityInUnits?: number;
     reason?: string;
   }>;
 };
@@ -158,12 +160,16 @@ export type PurchaseRecord = {
   metadata?: Record<string, unknown>;
 };
 
+type BeverageReference = string | { _id: string; name: string };
+
 export type WastageRecord = {
   _id: string;
   timestamp: string;
   items: Array<{
-    ingredient: IngredientReference;
-    quantityInGrams: number;
+    ingredient?: IngredientReference;
+    beverage?: BeverageReference;
+    quantityInGrams?: number;
+    quantityInUnits?: number;
     reason?: string;
   }>;
   metadata?: Record<string, unknown>;
