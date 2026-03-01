@@ -27,7 +27,8 @@ import {
   Dialog,
   DialogTitle,
   DialogContent,
-  DialogActions
+  DialogActions,
+  InputAdornment
 } from '@mui/material';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
@@ -41,6 +42,8 @@ import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+import SearchIcon from '@mui/icons-material/Search';
+import ClearIcon from '@mui/icons-material/Clear';
 import { useInventoryStore } from '../../hooks/useInventoryStore';
 import { useAuth } from '../../contexts/AuthContext';
 import type { PurchaseRecord } from '../../types';
@@ -96,6 +99,67 @@ type UpdateStockResult = {
   }[];
   unmatchedItems?: UnmatchedItem[];
   summary?: Record<string, number>;
+};
+
+// ─── DateFilterInput ─────────────────────────────────────────────────────────
+// Input de fecha compacto (DD-MMM-AA) que abre el selector nativo del navegador.
+
+const formatShortDate = (iso: string): string => {
+  const d = new Date(iso + 'T12:00:00');
+  const day = d.getDate().toString().padStart(2, '0');
+  const month = d.toLocaleDateString('es-ES', { month: 'short' }).replace('.', '');
+  const year = d.getFullYear().toString().slice(-2);
+  return `${day}-${month}-${year}`;
+};
+
+const DateFilterInput = ({
+  label,
+  value,
+  onChange
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+}) => {
+  const nativeRef = useRef<HTMLInputElement>(null);
+  const handleClick = () => {
+    try { nativeRef.current?.showPicker?.(); } catch { /* ignorar */ }
+  };
+  return (
+    <Box sx={{ position: 'relative', width: '100%' }}>
+      <TextField
+        size="small"
+        label={label}
+        value={value ? formatShortDate(value) : ''}
+        placeholder="DD-MMM-AA"
+        InputLabelProps={{ shrink: true }}
+        onClick={handleClick}
+        inputProps={{ readOnly: true, style: { cursor: 'pointer', fontSize: '0.8rem' } }}
+        sx={{ width: '100%' }}
+        InputProps={{
+          endAdornment: value ? (
+            <InputAdornment position="end">
+              <IconButton
+                size="small"
+                onClick={(e) => { e.stopPropagation(); onChange(''); }}
+                edge="end"
+                sx={{ mr: -0.75 }}
+              >
+                <ClearIcon sx={{ fontSize: 14 }} />
+              </IconButton>
+            </InputAdornment>
+          ) : null
+        }}
+      />
+      <input
+        ref={nativeRef}
+        type="date"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        style={{ position: 'absolute', opacity: 0, width: 0, height: 0, pointerEvents: 'none' }}
+      />
+    </Box>
+  );
 };
 
 // ─── Componente principal ─────────────────────────────────────────────────────
@@ -192,6 +256,12 @@ const PurchasesPage = () => {
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
   const ITEMS_VISIBLE = 4;
 
+  // ── Filtros ──────────────────────────────────────────────────────────────
+  const [searchText, setSearchText] = useState('');
+  const [debouncedSearchText, setDebouncedSearchText] = useState('');
+  const [filterDateFrom, setFilterDateFrom] = useState('');
+  const [filterDateTo, setFilterDateTo] = useState('');
+
   const toggleItemsExpanded = (purchaseId: string) => {
     setExpandedItems(prev => {
       const next = new Set(prev);
@@ -232,7 +302,45 @@ const PurchasesPage = () => {
     setAllPurchasesData(purchasesLog);
   }, [purchasesLog]);
 
-  const filteredPurchases = useMemo(() => allPurchasesData, [allPurchasesData]);
+  // Debounce para el texto de búsqueda (300 ms)
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearchText(searchText), 300);
+    return () => clearTimeout(timer);
+  }, [searchText]);
+
+  // Resetear a página 1 cuando cambian los filtros
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [debouncedSearchText, filterDateFrom, filterDateTo]);
+
+  const filteredPurchases = useMemo(() => {
+    let data = allPurchasesData;
+
+    if (filterDateFrom) {
+      const from = new Date(filterDateFrom + 'T00:00:00');
+      data = data.filter(p => new Date(p.timestamp) >= from);
+    }
+    if (filterDateTo) {
+      const to = new Date(filterDateTo + 'T23:59:59');
+      data = data.filter(p => new Date(p.timestamp) <= to);
+    }
+    if (debouncedSearchText.trim()) {
+      const q = debouncedSearchText.toLowerCase().trim();
+      data = data.filter(p => {
+        const invoiceNum = (p.invoiceNumber ?? '').toLowerCase();
+        const supplierRaw = (p.supplier ?? '').toLowerCase();
+        const supplierName = (supplierNameBySku.get(p.supplier ?? '') ?? '').toLowerCase();
+        if (invoiceNum.includes(q) || supplierRaw.includes(q) || supplierName.includes(q)) return true;
+        return p.items.some(item => {
+          const name = typeof item.ingredient === 'object' && item.ingredient !== null
+            ? ((item.ingredient as { name?: string }).name ?? '').toLowerCase()
+            : '';
+          return name.includes(q);
+        });
+      });
+    }
+    return data;
+  }, [allPurchasesData, debouncedSearchText, filterDateFrom, filterDateTo, supplierNameBySku]);
 
   const paginatedPurchases = useMemo(() => {
     if (filteredPurchases.length === 0) return [];
@@ -890,6 +998,51 @@ const PurchasesPage = () => {
         </DialogActions>
       </Dialog>
 
+      {/* ── Filtros ──────────────────────────────────────────────────────── */}
+      <Grid item xs={12}>
+        <Stack
+          direction={{ xs: 'column', sm: 'row' }}
+          spacing={1}
+          alignItems={{ sm: 'center' }}
+          sx={{ width: '100%' }}
+        >
+          <TextField
+            size="small"
+            placeholder="Indica una palabra para buscar…"
+            value={searchText}
+            onChange={(e) => setSearchText(e.target.value)}
+            sx={{ flex: 3, minWidth: 0, pb: 2 }}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon fontSize="small" color="action" />
+                </InputAdornment>
+              ),
+              endAdornment: searchText ? (
+                <InputAdornment position="end">
+                  <IconButton size="small" onClick={() => setSearchText('')} edge="end">
+                    <ClearIcon fontSize="small" />
+                  </IconButton>
+                </InputAdornment>
+              ) : null
+            }}
+          />
+          <Box sx={{ display: 'flex', gap: 1, flex: 2, minWidth: 0 }}>
+            <DateFilterInput label="Desde" value={filterDateFrom} onChange={setFilterDateFrom} />
+            <DateFilterInput label="Hasta" value={filterDateTo} onChange={setFilterDateTo} />
+          </Box>
+          {(searchText || filterDateFrom || filterDateTo) && (
+            <Button
+              size="small"
+              sx={{ flexShrink: 0, whiteSpace: 'nowrap' }}
+              onClick={() => { setSearchText(''); setFilterDateFrom(''); setFilterDateTo(''); }}
+            >
+              Limpiar
+            </Button>
+          )}
+        </Stack>
+      </Grid>
+
       {/* ── Lista de compras ───────────────────────────────────────────────── */}
       {initialLoad && logsLoading ? (
         <Grid item xs={12}>
@@ -899,7 +1052,11 @@ const PurchasesPage = () => {
         </Grid>
       ) : filteredPurchases.length === 0 ? (
         <Grid item xs={12}>
-          <Alert severity="info">No hay compras registradas en el rango de fechas seleccionado.</Alert>
+          <Alert severity="info">
+            {allPurchasesData.length === 0
+              ? 'No hay compras registradas.'
+              : 'No se encontraron compras con los filtros aplicados.'}
+          </Alert>
         </Grid>
       ) : (
         <>

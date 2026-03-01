@@ -1,8 +1,8 @@
 import { Grid, Card, CardContent, CardActionArea, Typography, Stack } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import SettingsIcon from '@mui/icons-material/Settings';
 import VpnKeyIcon from '@mui/icons-material/VpnKey';
+import EmailIcon from '@mui/icons-material/Email';
 
 const ConfiguracionesPage = () => {
   const navigate = useNavigate();
@@ -19,6 +19,12 @@ const ConfiguracionesPage = () => {
       description: 'Modificar el valor del bearer token para la API de Qamarero',
       icon: <VpnKeyIcon sx={{ fontSize: 48, color: 'primary.main' }} />,
       to: '/configuraciones/bearer'
+    },
+    {
+      title: 'Emails de Notificación',
+      description: 'Gestionar las direcciones de correo electrónico para notificaciones del sistema',
+      icon: <EmailIcon sx={{ fontSize: 48, color: 'primary.main' }} />,
+      to: '/configuraciones/notification-emails'
     }
   ];
 

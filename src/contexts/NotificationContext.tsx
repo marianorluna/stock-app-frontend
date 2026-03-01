@@ -226,9 +226,11 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
     // Escuchar eventos de inventario y convertirlos en notificaciones
     const handleInventorySale = (sale: any) => {
       console.log('Evento inventory:sale recibido:', sale);
+      // Si es una eliminación, no crear notificación de "nueva venta"
+      if (sale.deleted) return;
       addNotification({
         title: 'Nueva Venta Registrada',
-        message: `Se registró una venta de ${sale.lines?.length || 0} items`,
+        message: `Se registró una venta de ${sale.lines?.length || 0} platos`,
         type: 'success',
         data: { type: 'sale', sale },
       });
@@ -236,6 +238,8 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
 
     const handleInventoryPurchase = (purchase: any) => {
       console.log('Evento inventory:purchase recibido:', purchase);
+      // Si es una eliminación, no crear notificación de "nueva compra"
+      if (purchase.deleted) return;
       addNotification({
         title: 'Nueva Compra Registrada',
         message: `Se registró una compra de ${purchase.items?.length || 0} items`,
@@ -246,6 +250,8 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
 
     const handleInventoryWastage = (wastage: any) => {
       console.log('Evento inventory:wastage recibido:', wastage);
+      // Si es una eliminación, no crear notificación de "nueva merma"
+      if (wastage.deleted) return;
       addNotification({
         title: 'Merma Registrada',
         message: `Se registró una merma de ${wastage.items?.length || 0} items`,
