@@ -46,6 +46,7 @@ export type Beverage = {
   name: string;
   description?: string;
   sku: string;
+  productId?: string;
   stock: number;
   stockUnit: 'u';
   stockUnitName?: string;
@@ -64,6 +65,8 @@ export type Dish = {
   _id: string;
   name: string;
   description?: string;
+  sku?: string;
+  productId?: string;
   recipe: RecipeIngredient[];
   type?: 'dish' | 'drink' | 'dessert';
 };

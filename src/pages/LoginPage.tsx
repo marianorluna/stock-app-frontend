@@ -78,10 +78,10 @@ const LoginPage = () => {
           <Typography component="h1" variant="h5" align="center" gutterBottom>
             Stockearly
           </Typography>
-          
+
           <Tabs value={tabValue} onChange={(_, newValue) => setTabValue(newValue)} sx={{ mb: 3 }}>
             <Tab label="Iniciar Sesión" />
-            <Tab label="Registrarse" />
+            <Tab label="Registrarse" disabled={true} />
           </Tabs>
 
           {error && (

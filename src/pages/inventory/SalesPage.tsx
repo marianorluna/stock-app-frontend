@@ -191,6 +191,7 @@ const SalesPage = () => {
   const [updateLoading, setUpdateLoading] = useState(false);
   const [updateResult, setUpdateResult] = useState<UpdateStockResult | null>(null);
   const [updateResultOpen, setUpdateResultOpen] = useState(false);
+  const [updateDate, setUpdateDate] = useState<string>('');
 
   // ── Estados para dialog de configuraciones ───────────────────────────────
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -394,7 +395,8 @@ const SalesPage = () => {
     setUpdateConfirmOpen(false);
     setUpdateLoading(true);
     try {
-      const response = await apiClient.post<UpdateStockResult>('/pos/update-stock');
+      const requestBody = updateDate ? { date: updateDate } : {};
+      const response = await apiClient.post<UpdateStockResult>('/pos/update-stock', requestBody);
       const data = response.data;
       setUpdateResult(data);
       if (data.success && !data.noTickets) {
@@ -416,6 +418,7 @@ const SalesPage = () => {
     } finally {
       setUpdateLoading(false);
       setUpdateResultOpen(true);
+      setUpdateDate(''); // Limpiar la fecha después de la actualización
     }
   };
 
@@ -524,7 +527,10 @@ const SalesPage = () => {
       {/* ── Diálogo confirmación actualización de stock desde TPV ─────────── */}
       <Dialog
         open={updateConfirmOpen}
-        onClose={() => setUpdateConfirmOpen(false)}
+        onClose={() => {
+          setUpdateConfirmOpen(false);
+          setUpdateDate(''); // Limpiar fecha al cerrar
+        }}
         maxWidth="sm"
         fullWidth
       >
@@ -536,18 +542,32 @@ const SalesPage = () => {
         </DialogTitle>
         <DialogContent>
           <Stack spacing={2}>
+            {/* Selector de fecha */}
+            <Box>
+              <Typography variant="body2" fontWeight={500} gutterBottom>
+                Fecha de actualización (opcional)
+              </Typography>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+                Si no seleccionas una fecha, se utilizará el día de hoy.
+              </Typography>
+              <DateFilterInput
+                label="Fecha"
+                value={updateDate}
+                onChange={setUpdateDate}
+              />
+            </Box>
             <Typography>
               Se realizará el siguiente proceso de forma <strong>automática e irreversible</strong>:
             </Typography>
             <Box component="ol" sx={{ pl: 2.5, m: 0, '& li': { mb: 0.75 } }}>
               <li>
                 <Typography variant="body2">
-                  <strong>Obtención de tickets PAID del día</strong> desde el TPV Qamarero para la fecha de hoy.
+                  <strong>Obtención de tickets PAID del día</strong> desde el TPV Qamarero para la fecha {updateDate ? formatShortDate(updateDate) : 'de hoy'}.
                 </Typography>
               </li>
               <li>
                 <Typography variant="body2">
-                  <strong>Verificación de duplicados:</strong> se comprueba que no se hayan importado ya las ventas de hoy.
+                  <strong>Verificación de duplicados:</strong> se comprueba que no se hayan importado ya las ventas {updateDate ? `del ${formatShortDate(updateDate)}` : 'de hoy'}.
                 </Typography>
               </li>
               <li>
@@ -573,7 +593,14 @@ const SalesPage = () => {
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setUpdateConfirmOpen(false)}>Cancelar</Button>
+          <Button
+            onClick={() => {
+              setUpdateConfirmOpen(false);
+              setUpdateDate(''); // Limpiar fecha al cancelar
+            }}
+          >
+            Cancelar
+          </Button>
           <Button
             variant="contained"
             startIcon={<SyncIcon />}

@@ -11,6 +11,7 @@ import {
   DialogContent,
   DialogTitle,
   Grid,
+  IconButton,
   InputAdornment,
   MenuItem,
   Stack,
@@ -22,6 +23,7 @@ import { useInventoryStore } from '../hooks/useInventoryStore';
 import apiClient from '../services/apiClient';
 import { RequirePermission } from '../components/auth/RequirePermission';
 import SearchIcon from '@mui/icons-material/Search';
+import ClearIcon from '@mui/icons-material/Clear';
 import type { Dish } from '../types';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
@@ -30,15 +32,15 @@ import TagIcon from '@mui/icons-material/Tag';
 
 // Mapeo categoryName → elemento SKU (según SKU_ELEMENTS.md, sección Recetas)
 const CATEGORY_ELEMENT_MAP: Record<string, string> = {
-  'Platos':           'PL',
-  'Carta':            'CT',
+  'Platos': 'PL',
+  'Carta': 'CT',
   'Platos principales': 'PP',
-  'Combo':            'CB',
-  'Postres':          'PT',
-  'Entrantes':        'EN',
-  'Menu del dia':     'MD',
-  'Null':             'NL',
-  'Cafe':             'CA'
+  'Combo': 'CB',
+  'Postres': 'PT',
+  'Entrantes': 'EN',
+  'Menu del dia': 'MD',
+  'Null': 'NL',
+  'Cafe': 'CA'
 };
 
 const RECIPE_CATEGORIES = Object.keys(CATEGORY_ELEMENT_MAP);
@@ -86,6 +88,7 @@ type RecipeFormValues = {
   name: string;
   categoryName: string;
   description?: string;
+  productId: string;
   recipe: Array<{
     ingredient: string;
     quantityInGrams: number;
@@ -96,6 +99,7 @@ const defaultValues: RecipeFormValues = {
   name: '',
   categoryName: '',
   description: '',
+  productId: '',
   recipe: [{ ingredient: '', quantityInGrams: 0 }]
 };
 
@@ -174,7 +178,12 @@ const RecipesPage = () => {
     });
   }, [recipes, searchTerm]);
 
-  const existingSkus = useMemo(() => dishes.map((d) => d.sku).filter(Boolean), [dishes]);
+  const existingSkus = useMemo(() =>
+    dishes
+      .map((d) => d.sku)
+      .filter((sku): sku is string => Boolean(sku)),
+    [dishes]
+  );
 
   useEffect(() => {
     void fetchIngredients();
@@ -199,10 +208,13 @@ const RecipesPage = () => {
           quantityInGrams: item.quantityInGrams ?? 0
         }))
         : [{ ingredient: '', quantityInGrams: 0 }];
+    // Si productId es "S/PID" (valor por defecto), mostrar como vacío
+    const productId = dish.productId === 'S/PID' ? '' : (dish.productId ?? '');
     return {
       name: dish.name,
       categoryName: '', // Las recetas existentes no tienen categoryName, se deriva del SKU
       description: dish.description ?? '',
+      productId,
       recipe
     };
   };
@@ -257,9 +269,22 @@ const RecipesPage = () => {
         quantityInGrams: item.quantityInGrams
       }));
 
-    const payload: any = {
+    // Si productId está vacío, usar "S/PID" como valor por defecto
+    const productId = values.productId.trim() || 'S/PID';
+
+    // Definir el tipo del payload correctamente
+    const payload: {
+      name: string;
+      description?: string;
+      productId: string;
+      recipe: Array<{
+        ingredient: string;
+        quantityInGrams: number;
+      }>;
+    } = {
       name: values.name,
-      description: values.description,
+      description: values.description?.trim() || undefined,
+      productId,
       recipe
     };
 
@@ -293,7 +318,7 @@ const RecipesPage = () => {
           <Typography variant="h4">Recetas</Typography>
           <RequirePermission resource="recipes" action="create" hide>
             <Button variant="contained" onClick={handleOpen}>
-              Crear Nuevo
+              Crear Nueva
             </Button>
           </RequirePermission>
         </Stack>
@@ -306,19 +331,43 @@ const RecipesPage = () => {
       )}
 
       <Grid item xs={12}>
-        <TextField
-          fullWidth
-          placeholder="Buscar recetas"
-          value={searchTerm}
-          onChange={(event) => setSearchTerm(event.target.value)}
-          InputProps={{
-            startAdornment: (
-              <InputAdornment position="start">
-                <SearchIcon fontSize="small" />
-              </InputAdornment>
-            )
-          }}
-        />
+        <Stack
+          direction={{ xs: 'column', sm: 'row' }}
+          spacing={1}
+          alignItems={{ sm: 'center' }}
+          sx={{ width: '100%' }}
+        >
+          <TextField
+            size="small"
+            placeholder="Buscar recetas"
+            value={searchTerm}
+            onChange={(event) => setSearchTerm(event.target.value)}
+            sx={{ flex: 1, minWidth: 0 }}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon fontSize="small" color="action" />
+                </InputAdornment>
+              ),
+              endAdornment: searchTerm ? (
+                <InputAdornment position="end">
+                  <IconButton size="small" onClick={() => setSearchTerm('')} edge="end">
+                    <ClearIcon fontSize="small" />
+                  </IconButton>
+                </InputAdornment>
+              ) : null
+            }}
+          />
+          {searchTerm && (
+            <Button
+              size="small"
+              sx={{ flexShrink: 0, whiteSpace: 'nowrap' }}
+              onClick={() => setSearchTerm('')}
+            >
+              Limpiar
+            </Button>
+          )}
+        </Stack>
       </Grid>
       <Grid item xs={12}>
         <Typography variant="body2" color="text.secondary">
@@ -362,15 +411,6 @@ const RecipesPage = () => {
                     Editar
                   </Button>
                 </RequirePermission>
-                <RequirePermission resource="recipes" action="create" hide>
-                  <Button
-                    size="small"
-                    startIcon={<ContentCopyIcon fontSize="small" />}
-                    onClick={() => handleDuplicate(dish)}
-                  >
-                    Duplicar
-                  </Button>
-                </RequirePermission>
                 <RequirePermission resource="recipes" action="delete" hide>
                   <Button
                     size="small"
@@ -391,12 +431,6 @@ const RecipesPage = () => {
         <DialogTitle>{dialogTitle}</DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ mt: 1 }}>
-            <Controller
-              control={control}
-              name="name"
-              rules={{ required: true }}
-              render={({ field }) => <TextField label="Nombre" {...field} />}
-            />
             {isEditMode ? (
               // En edición: mostrar SKU como solo lectura
               <TextField
@@ -408,6 +442,10 @@ const RecipesPage = () => {
             ) : (
               // En creación / duplicación: selector de categoría + preview SKU
               <Stack spacing={2}>
+                <SkuPreview
+                  control={control}
+                  existingSkus={existingSkus}
+                />
                 <Controller
                   control={control}
                   name="categoryName"
@@ -427,11 +465,26 @@ const RecipesPage = () => {
                     </TextField>
                   )}
                 />
-                <SkuPreview
-                  control={control}
-                  existingSkus={existingSkus}
-                />
               </Stack>
+            )}
+            <Controller
+              control={control}
+              name="name"
+              rules={{ required: true }}
+              render={({ field }) => <TextField label="Nombre" {...field} />}
+            />
+            {!isEditMode && (
+              <Controller
+                control={control}
+                name="productId"
+                render={({ field }) => (
+                  <TextField
+                    label="ID Producto (Qmarero)"
+                    {...field}
+                    helperText="ID del producto en Qmarero. Si no se especifica, se usará 'S/PID'"
+                  />
+                )}
+              />
             )}
             <Controller
               control={control}
@@ -461,13 +514,35 @@ const RecipesPage = () => {
                   <Controller
                     control={control}
                     name={`recipe.${index}.quantityInGrams`}
-                    rules={{ required: true, min: 1 }}
-                    render={({ field }) => (
+                    rules={{
+                      required: true,
+                      min: 1,
+                      validate: (value) => {
+                        if (value !== 0 && value !== Math.floor(value)) {
+                          return 'La cantidad debe ser un número entero';
+                        }
+                        return true;
+                      }
+                    }}
+                    render={({ field: { onChange, value, ...field }, fieldState: { error } }) => (
                       <TextField
+                        {...field}
                         label="Cantidad (g)"
                         type="number"
-                        value={field.value}
-                        onChange={(event) => field.onChange(Number(event.target.value))}
+                        inputProps={{ min: 1, step: 1 }}
+                        value={value === 0 ? '' : value ?? ''}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          if (val === '') {
+                            onChange(0);
+                          } else {
+                            // Redondear a entero
+                            const intValue = Math.floor(Number(val));
+                            onChange(intValue);
+                          }
+                        }}
+                        error={!!error}
+                        helperText={error?.message}
                       />
                     )}
                   />
@@ -490,7 +565,19 @@ const RecipesPage = () => {
       <Dialog open={Boolean(confirmDelete)} onClose={() => setConfirmDelete(null)} maxWidth="xs" fullWidth>
         <DialogTitle>Confirmar eliminación</DialogTitle>
         <DialogContent>
-          <Typography>¿Estás seguro de que deseas eliminar la receta "{confirmDelete?.name}"?</Typography>
+          <Stack spacing={2}>
+            <Typography>
+              ¿Estás seguro de que deseas eliminar la receta "{confirmDelete?.name}"?
+            </Typography>
+            <Alert severity="warning">
+              <Typography variant="body2" fontWeight="bold" gutterBottom>
+                Advertencia: Esta acción es irreversible
+              </Typography>
+              <Typography variant="body2">
+                La eliminación de esta receta afectará los cálculos del inventario y las operaciones relacionadas.
+              </Typography>
+            </Alert>
+          </Stack>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setConfirmDelete(null)}>Cancelar</Button>
