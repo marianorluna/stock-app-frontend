@@ -24,7 +24,7 @@ const decodeJWT = (token: string): { iat?: number; exp?: number } | null => {
   try {
     const parts = token.split('.');
     if (parts.length !== 3) return null;
-    
+
     const payload = parts[1];
     const decoded = JSON.parse(atob(payload.replace(/-/g, '+').replace(/_/g, '/')));
     return decoded;
@@ -95,7 +95,7 @@ const ActualizarBearerPage = () => {
   // Decodificar el bearer ingresado en el input
   const inputBearerInfo = useMemo((): BearerInfo | null => {
     if (!bearerValue.trim()) return null;
-    
+
     const decoded = decodeJWT(bearerValue.trim());
     if (decoded && decoded.iat && decoded.exp) {
       return {
@@ -147,7 +147,7 @@ const ActualizarBearerPage = () => {
           <Button variant="text" onClick={() => navigate('/configuraciones')}>
             ← Volver
           </Button>
-          <Typography variant="h4">Actualizar Bearer</Typography>
+          <Typography variant="h4">Bearer Token</Typography>
         </Stack>
       </Grid>
 
