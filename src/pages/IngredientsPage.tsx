@@ -12,6 +12,7 @@ import {
   DialogContent,
   DialogTitle,
   Grid,
+  IconButton,
   MenuItem,
   Stack,
   TextField,
@@ -24,6 +25,7 @@ import apiClient from '../services/apiClient';
 import type { Ingredient } from '../types';
 import { RequirePermission } from '../components/auth/RequirePermission';
 import SearchIcon from '@mui/icons-material/Search';
+import ClearIcon from '@mui/icons-material/Clear';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import TagIcon from '@mui/icons-material/Tag';
@@ -37,7 +39,7 @@ const CATEGORY_ELEMENT_MAP: Record<string, string> = {
   'Frutas': 'FR',
   'Proteinas': 'PR',
   'Gases': 'GS',
-  'Bebidas': 'BE',
+  'Liquidos': 'LI',
   'Cafe': 'CF',
   'Aceites': 'AC',
   'Frutos secos': 'FS',
@@ -87,18 +89,24 @@ const generateIngredientSku = (
 
 type IngredientFormValues = {
   name: string;
+  description: string;
   categoryName: string;
   stock: number;
   reorderPoint: number;
+  factorMermaNat: number; // En el formulario se maneja como porcentaje (0-100)
+  pesoUnitarioGramos: number;
   allergens: string[];
   codeArticlePurchase: string;
 };
 
 const defaultValues: IngredientFormValues = {
   name: '',
+  description: '',
   categoryName: '',
   stock: 0,
   reorderPoint: 0,
+  factorMermaNat: 0,
+  pesoUnitarioGramos: 0,
   allergens: [],
   codeArticlePurchase: ''
 };
@@ -165,7 +173,7 @@ const IngredientsPage = () => {
     reset,
     control,
     getValues,
-    formState: { isSubmitting }
+    formState: { isSubmitting, errors }
   } = useForm<IngredientFormValues>({ defaultValues });
 
   useEffect(() => {
@@ -192,11 +200,20 @@ const IngredientsPage = () => {
   const handleEdit = (ingredient: Ingredient) => {
     setDialogMode('edit');
     setSelectedIngredient(ingredient);
+    // Convertir factorMermaNat de decimal (0-1) a porcentaje (0-100) para el formulario
+    const factorMermaNatPercent = ingredient.factorMermaNat != null
+      ? Math.round(ingredient.factorMermaNat * 100)
+      : 0;
+    // Si pesoUnitarioGramos es 1000 (valor por defecto), mostrar como 0 (vacío en el input)
+    const pesoUnitarioGramos = ingredient.pesoUnitarioGramos === 1000 ? 0 : (ingredient.pesoUnitarioGramos ?? 0);
     reset({
       name: ingredient.name,
+      description: ingredient.description ?? '',
       categoryName: ingredient.categoryName ?? '',
       stock: ingredient.stock,
       reorderPoint: ingredient.reorderPoint ?? 0,
+      factorMermaNat: factorMermaNatPercent,
+      pesoUnitarioGramos,
       allergens: ingredient.allergens ?? [],
       codeArticlePurchase: ingredient.codeArticlePurchase ?? ''
     });
@@ -220,14 +237,26 @@ const IngredientsPage = () => {
   };
 
   const onSubmit = handleSubmit(async (values) => {
+    // Si description está vacío, usar el valor de name
+    const description = values.description.trim() || values.name;
+    // Si codeArticlePurchase está vacío, usar "S/C"
+    const codeArticlePurchase = values.codeArticlePurchase.trim() || 'S/C';
+    // Convertir factorMermaNat de porcentaje (0-100) a decimal (0-1) con máximo 2 decimales
+    const factorMermaNat = Math.round((values.factorMermaNat / 100) * 100) / 100;
+    // Si pesoUnitarioGramos es 0 o no se especifica, usar 1000 como valor por defecto
+    const pesoUnitarioGramos = values.pesoUnitarioGramos > 0 ? values.pesoUnitarioGramos : 1000;
+
     if (dialogMode === 'edit' && selectedIngredient) {
       // En edición: no cambiar el SKU
       await apiClient.put<Ingredient>(`/ingredients/${selectedIngredient._id}`, {
         name: values.name,
+        description,
         stock: values.stock,
         reorderPoint: values.reorderPoint,
+        factorMermaNat,
+        pesoUnitarioGramos,
         allergens: values.allergens,
-        codeArticlePurchase: values.codeArticlePurchase
+        codeArticlePurchase
       });
     } else {
       // En creación / duplicación: generar SKU automáticamente
@@ -235,7 +264,20 @@ const IngredientsPage = () => {
       if (!sku) {
         return; // No debería ocurrir si la validación funciona
       }
-      await apiClient.post<Ingredient>('/ingredients', { ...values, sku });
+      await apiClient.post<Ingredient>('/ingredients', {
+        name: values.name,
+        description,
+        categoryName: values.categoryName,
+        stock: values.stock,
+        stockUnit: 'g',
+        stockUnitName: 'gramo',
+        factorMermaNat,
+        reorderPoint: values.reorderPoint,
+        pesoUnitarioGramos,
+        allergens: values.allergens,
+        codeArticlePurchase,
+        sku
+      });
     }
     setOpen(false);
     setSelectedIngredient(null);
@@ -264,19 +306,43 @@ const IngredientsPage = () => {
         </Grid>
       )}
       <Grid item xs={12}>
-        <TextField
-          fullWidth
-          placeholder="Buscar ingredientes"
-          value={searchTerm}
-          onChange={(event) => setSearchTerm(event.target.value)}
-          InputProps={{
-            startAdornment: (
-              <InputAdornment position="start">
-                <SearchIcon fontSize="small" />
-              </InputAdornment>
-            )
-          }}
-        />
+        <Stack
+          direction={{ xs: 'column', sm: 'row' }}
+          spacing={1}
+          alignItems={{ sm: 'center' }}
+          sx={{ width: '100%' }}
+        >
+          <TextField
+            size="small"
+            placeholder="Buscar ingredientes"
+            value={searchTerm}
+            onChange={(event) => setSearchTerm(event.target.value)}
+            sx={{ flex: 1, minWidth: 0 }}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon fontSize="small" color="action" />
+                </InputAdornment>
+              ),
+              endAdornment: searchTerm ? (
+                <InputAdornment position="end">
+                  <IconButton size="small" onClick={() => setSearchTerm('')} edge="end">
+                    <ClearIcon fontSize="small" />
+                  </IconButton>
+                </InputAdornment>
+              ) : null
+            }}
+          />
+          {searchTerm && (
+            <Button
+              size="small"
+              sx={{ flexShrink: 0, whiteSpace: 'nowrap' }}
+              onClick={() => setSearchTerm('')}
+            >
+              Limpiar
+            </Button>
+          )}
+        </Stack>
       </Grid>
       <Grid item xs={12}>
         <Typography variant="body2" color="text.secondary">
@@ -324,29 +390,31 @@ const IngredientsPage = () => {
         <DialogTitle>{dialogTitle}</DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ mt: 1 }}>
-            <TextField
-              label="Nombre"
-              {...register('name', { required: true })}
-            />
             {isEditMode ? (
               // En edición: mostrar SKU y categoría como solo lectura
               <Stack spacing={2}>
-                <TextField
-                  label="Categoría"
-                  value={getValues('categoryName')}
-                  InputProps={{ readOnly: true }}
-                  helperText="La categoría no se puede cambiar sin modificar el SKU"
-                />
                 <TextField
                   label="SKU"
                   value={selectedIngredient?.sku ?? ''}
                   InputProps={{ readOnly: true }}
                   helperText="El SKU es inmutable"
+                  disabled={true}
+                />
+                <TextField
+                  label="Categoría"
+                  value={selectedIngredient?.categoryName ?? ''}
+                  InputProps={{ readOnly: true }}
+                  helperText="La categoría sólo se modifica con el SKU"
+                  disabled={true}
                 />
               </Stack>
             ) : (
               // En creación / duplicación: selector de categoría + preview SKU
               <Stack spacing={2}>
+                <SkuPreview
+                  control={control}
+                  existingSkus={existingSkus}
+                />
                 <TextField
                   select
                   label="Categoría *"
@@ -360,21 +428,185 @@ const IngredientsPage = () => {
                     </MenuItem>
                   ))}
                 </TextField>
-                <SkuPreview
-                  control={control}
-                  existingSkus={existingSkus}
-                />
               </Stack>
             )}
             <TextField
-              label="Stock inicial (g)"
-              type="number"
-              {...register('stock', { valueAsNumber: true })}
+              label="Nombre *"
+              {...register('name', { required: 'El nombre es obligatorio' })}
+              error={!!errors.name}
+              helperText={errors.name?.message as string}
             />
             <TextField
-              label="Punto de pedido (g)"
-              type="number"
-              {...register('reorderPoint', { valueAsNumber: true })}
+              label="Descripción"
+              {...register('description')}
+              helperText="Si no se especifica, se usará el nombre"
+            />
+            <Controller
+              control={control}
+              name="stock"
+              rules={{
+                required: 'El stock inicial es obligatorio',
+                min: { value: 0, message: 'El stock debe ser mayor o igual a 0' },
+                validate: (value) => {
+                  if (value !== 0 && value !== Math.floor(value)) {
+                    return 'El stock debe ser un número entero';
+                  }
+                  return true;
+                }
+              }}
+              render={({ field: { onChange, value, ...field }, fieldState: { error } }) => (
+                <TextField
+                  {...field}
+                  label="Stock inicial (g) *"
+                  type="number"
+                  inputProps={{ min: 0, step: 1 }}
+                  value={value === 0 ? '' : value ?? ''}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (val === '') {
+                      onChange(0);
+                    } else {
+                      // Redondear a entero
+                      const intValue = Math.floor(Number(val));
+                      onChange(intValue);
+                    }
+                  }}
+                  error={!!error}
+                  helperText={error?.message}
+                />
+              )}
+            />
+            <Controller
+              control={control}
+              name="reorderPoint"
+              rules={{
+                required: 'El punto de pedido es obligatorio',
+                min: { value: 0, message: 'El punto de pedido debe ser mayor o igual a 0' },
+                validate: (value) => {
+                  if (value !== 0 && value !== Math.floor(value)) {
+                    return 'El punto de pedido debe ser un número entero';
+                  }
+                  return true;
+                }
+              }}
+              render={({ field: { onChange, value, ...field }, fieldState: { error } }) => (
+                <TextField
+                  {...field}
+                  label="Punto de pedido (g) *"
+                  type="number"
+                  inputProps={{ min: 0, step: 1 }}
+                  value={value === 0 ? '' : value ?? ''}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (val === '') {
+                      onChange(0);
+                    } else {
+                      // Redondear a entero
+                      const intValue = Math.floor(Number(val));
+                      onChange(intValue);
+                    }
+                  }}
+                  error={!!error}
+                  helperText={error?.message}
+                />
+              )}
+            />
+            <Controller
+              control={control}
+              name="factorMermaNat"
+              rules={{
+                min: { value: 0, message: 'El porcentaje debe ser mayor o igual a 0' },
+                max: { value: 100, message: 'El porcentaje debe ser menor o igual a 100' },
+                validate: (value) => {
+                  // Permitir 0 como valor válido
+                  if (value === 0) return true;
+                  // Validar que sea un número entero
+                  if (value !== Math.floor(value)) {
+                    return 'El porcentaje debe ser un número entero';
+                  }
+                  // Validar rango 0-100
+                  if (value < 0 || value > 100) {
+                    return 'El porcentaje debe estar entre 0 y 100';
+                  }
+                  return true;
+                }
+              }}
+              render={({ field: { onChange, value, ...field }, fieldState: { error } }) => (
+                <TextField
+                  {...field}
+                  label="Factor merma natural (%)"
+                  type="number"
+                  inputProps={{ min: 0, max: 100, step: 1 }}
+                  value={value === 0 ? '' : value ?? ''}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (val === '') {
+                      onChange(0);
+                    } else {
+                      // Convertir a número entero
+                      const numValue = Number(val);
+                      if (isNaN(numValue)) {
+                        return; // No hacer nada si no es un número válido
+                      }
+                      // Redondear hacia abajo para obtener entero
+                      const intValue = Math.floor(numValue);
+                      // Limitar entre 0 y 100 (ambos incluidos)
+                      const clampedValue = Math.max(0, Math.min(100, intValue));
+                      onChange(clampedValue);
+                    }
+                  }}
+                  error={!!error}
+                  helperText={error?.message || 'Valor entre 0 y 100 (entero). Cero por defecto.'}
+                />
+              )}
+            />
+            <Controller
+              control={control}
+              name="pesoUnitarioGramos"
+              rules={{
+                min: { value: 0, message: 'El peso debe ser mayor o igual a 0' },
+                validate: (value) => {
+                  if (value !== 0 && value !== Math.floor(value)) {
+                    return 'El peso debe ser un número entero';
+                  }
+                  return true;
+                }
+              }}
+              render={({ field: { onChange, value, ...field }, fieldState: { error } }) => {
+                // En modo crear: mostrar '' si es 0 o 1000. En modo editar: mostrar '' solo si es 1000
+                const displayValue = isEditMode
+                  ? (value === 1000 ? '' : value ?? '')
+                  : (value === 0 || value === 1000 ? '' : value ?? '');
+
+                return (
+                  <TextField
+                    {...field}
+                    label="Peso Unitario (g)"
+                    type="number"
+                    inputProps={{ min: 0, step: 1 }}
+                    value={displayValue}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val === '') {
+                        // En modo crear, establecer a 0 para que se muestre vacío
+                        // En modo editar, mantener 0 también
+                        onChange(0);
+                      } else {
+                        // Redondear a entero
+                        const intValue = Math.floor(Number(val));
+                        onChange(intValue > 0 ? intValue : 0);
+                      }
+                    }}
+                    error={!!error}
+                    helperText={error?.message || 'Si no se especifica, se usará 1000 g por defecto'}
+                  />
+                );
+              }}
+            />
+            <TextField
+              label="Código artículo compra"
+              {...register('codeArticlePurchase')}
+              helperText="Si no se especifica, se usará 'S/C'"
             />
             <Controller
               control={control}
@@ -406,10 +638,9 @@ const IngredientsPage = () => {
                 />
               )}
             />
-            <TextField label="Código artículo compra" {...register('codeArticlePurchase')} />
           </Stack>
         </DialogContent>
-        <DialogActions>
+        <DialogActions sx={{ pb: 2 }}>
           <Button onClick={handleClose}>Cancelar</Button>
           <Button onClick={onSubmit} variant="contained" disabled={isSubmitting}>
             Guardar
@@ -420,9 +651,19 @@ const IngredientsPage = () => {
       <Dialog open={Boolean(confirmDelete)} onClose={() => setConfirmDelete(null)} maxWidth="xs" fullWidth>
         <DialogTitle>Confirmar eliminación</DialogTitle>
         <DialogContent>
-          <Typography>
-            ¿Estás seguro de que deseas eliminar el ingrediente "{confirmDelete?.name}"?
-          </Typography>
+          <Stack spacing={2}>
+            <Typography>
+              ¿Estás seguro de que deseas eliminar el ingrediente "{confirmDelete?.name}"?
+            </Typography>
+            <Alert severity="warning">
+              <Typography variant="body2" fontWeight="bold" gutterBottom>
+                Advertencia: Esta acción es irreversible
+              </Typography>
+              <Typography variant="body2">
+                La eliminación de este ingrediente afectará los cálculos del inventario y las recetas que lo utilicen.
+              </Typography>
+            </Alert>
+          </Stack>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setConfirmDelete(null)}>Cancelar</Button>

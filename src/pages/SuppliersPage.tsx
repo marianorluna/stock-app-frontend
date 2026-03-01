@@ -11,6 +11,7 @@ import {
   DialogContent,
   DialogTitle,
   Grid,
+  IconButton,
   InputAdornment,
   MenuItem,
   Stack,
@@ -18,6 +19,7 @@ import {
   Typography
 } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
+import ClearIcon from '@mui/icons-material/Clear';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import TagIcon from '@mui/icons-material/Tag';
@@ -311,19 +313,43 @@ const SuppliersPage = () => {
       </Grid>
 
       <Grid item xs={12}>
-        <TextField
-          fullWidth
-          placeholder="Buscar proveedores"
-          value={searchTerm}
-          onChange={(event) => setSearchTerm(event.target.value)}
-          InputProps={{
-            startAdornment: (
-              <InputAdornment position="start">
-                <SearchIcon fontSize="small" />
-              </InputAdornment>
-            )
-          }}
-        />
+        <Stack
+          direction={{ xs: 'column', sm: 'row' }}
+          spacing={1}
+          alignItems={{ sm: 'center' }}
+          sx={{ width: '100%' }}
+        >
+          <TextField
+            size="small"
+            placeholder="Buscar proveedores"
+            value={searchTerm}
+            onChange={(event) => setSearchTerm(event.target.value)}
+            sx={{ flex: 1, minWidth: 0 }}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon fontSize="small" color="action" />
+                </InputAdornment>
+              ),
+              endAdornment: searchTerm ? (
+                <InputAdornment position="end">
+                  <IconButton size="small" onClick={() => setSearchTerm('')} edge="end">
+                    <ClearIcon fontSize="small" />
+                  </IconButton>
+                </InputAdornment>
+              ) : null
+            }}
+          />
+          {searchTerm && (
+            <Button
+              size="small"
+              sx={{ flexShrink: 0, whiteSpace: 'nowrap' }}
+              onClick={() => setSearchTerm('')}
+            >
+              Limpiar
+            </Button>
+          )}
+        </Stack>
       </Grid>
       {!loading && (
         <Grid item xs={12}>
@@ -506,9 +532,19 @@ const SuppliersPage = () => {
       <Dialog open={Boolean(confirmDelete)} onClose={() => setConfirmDelete(null)} maxWidth="xs" fullWidth>
         <DialogTitle>Confirmar eliminación</DialogTitle>
         <DialogContent>
-          <Typography>
-            ¿Estás seguro de que deseas eliminar al proveedor "{confirmDelete?.name}"? Esto eliminará la referencia de sus compras.
-          </Typography>
+          <Stack spacing={2}>
+            <Typography>
+              ¿Estás seguro de que deseas eliminar al proveedor "{confirmDelete?.name}"? Esto eliminará la referencia de sus compras.
+            </Typography>
+            <Alert severity="warning">
+              <Typography variant="body2" fontWeight="bold" gutterBottom>
+                Advertencia: Esta acción es irreversible
+              </Typography>
+              <Typography variant="body2">
+                La eliminación de este proveedor afectará los cálculos del inventario y las operaciones relacionadas.
+              </Typography>
+            </Alert>
+          </Stack>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setConfirmDelete(null)}>Cancelar</Button>

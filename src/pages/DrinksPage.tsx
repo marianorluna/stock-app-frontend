@@ -12,6 +12,7 @@ import {
   DialogContent,
   DialogTitle,
   Grid,
+  IconButton,
   InputAdornment,
   MenuItem,
   Stack,
@@ -23,6 +24,7 @@ import { useInventoryStore } from '../hooks/useInventoryStore';
 import apiClient from '../services/apiClient';
 import { RequirePermission } from '../components/auth/RequirePermission';
 import SearchIcon from '@mui/icons-material/Search';
+import ClearIcon from '@mui/icons-material/Clear';
 import type { Beverage } from '../types';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
@@ -79,7 +81,9 @@ const generateBeverageSku = (
 
 type BeverageFormValues = {
   name: string;
+  description: string;
   categoryName: string;
+  productId: string;
   stock: number;
   reorderPoint: number;
   allergens: string[];
@@ -88,7 +92,9 @@ type BeverageFormValues = {
 
 const defaultValues: BeverageFormValues = {
   name: '',
+  description: '',
   categoryName: '',
+  productId: '',
   stock: 0,
   reorderPoint: 0,
   allergens: [],
@@ -159,7 +165,7 @@ const DrinksPage = () => {
     reset,
     control,
     getValues,
-    formState: { isSubmitting }
+    formState: { isSubmitting, errors }
   } = useForm<BeverageFormValues>({ defaultValues });
 
   useEffect(() => {
@@ -189,13 +195,19 @@ const DrinksPage = () => {
   const handleEdit = (drink: Beverage) => {
     setDialogMode('edit');
     setSelectedDrink(drink);
+    // Si codeArticlePurchase es "S/C" (valor por defecto), mostrar como vacío
+    const codeArticlePurchase = drink.codeArticlePurchase === 'S/C' ? '' : (drink.codeArticlePurchase ?? '');
+    // Si productId es "S/PID" (valor por defecto), mostrar como vacío
+    const productId = drink.productId === 'S/PID' ? '' : (drink.productId ?? '');
     reset({
       name: drink.name,
+      description: drink.description ?? '',
       categoryName: drink.categoryName ?? '',
+      productId,
       stock: drink.stock,
       reorderPoint: drink.reorderPoint ?? 0,
       allergens: drink.allergens ?? [],
-      codeArticlePurchase: drink.codeArticlePurchase ?? ''
+      codeArticlePurchase
     });
     setOpen(true);
   };
@@ -212,20 +224,41 @@ const DrinksPage = () => {
   };
 
   const onSubmit = handleSubmit(async (values) => {
+    // Si description está vacío, usar el valor de name
+    const description = values.description.trim() || values.name;
+    // Si codeArticlePurchase está vacío, usar "S/C"
+    const codeArticlePurchase = values.codeArticlePurchase.trim() || 'S/C';
+    // Si productId está vacío, usar "S/PID" como valor por defecto
+    const productId = values.productId.trim() || 'S/PID';
+
     if (dialogMode === 'edit' && selectedDrink) {
       // En edición: no cambiar el SKU
       await apiClient.put<Beverage>(`/beverages/${selectedDrink._id}`, {
         name: values.name,
+        description,
+        productId,
         stock: values.stock,
         reorderPoint: values.reorderPoint,
         allergens: values.allergens,
-        codeArticlePurchase: values.codeArticlePurchase
+        codeArticlePurchase
       });
     } else {
       // En creación: generar SKU automáticamente
       const sku = generateBeverageSku(values.categoryName, values.name, existingSkus);
       if (!sku) return;
-      await apiClient.post<Beverage>('/beverages', { ...values, sku });
+      await apiClient.post<Beverage>('/beverages', {
+        name: values.name,
+        description,
+        categoryName: values.categoryName,
+        productId,
+        stock: values.stock,
+        stockUnit: 'u',
+        stockUnitName: 'unidad',
+        reorderPoint: values.reorderPoint,
+        allergens: values.allergens,
+        codeArticlePurchase,
+        sku
+      });
     }
     setOpen(false);
     setSelectedDrink(null);
@@ -243,7 +276,7 @@ const DrinksPage = () => {
           <Typography variant="h4">Bebidas</Typography>
           <RequirePermission resource="ingredients" action="create" hide>
             <Button variant="contained" onClick={handleOpen}>
-              Crear Nuevo
+              Crear Nueva
             </Button>
           </RequirePermission>
         </Stack>
@@ -256,19 +289,43 @@ const DrinksPage = () => {
       )}
 
       <Grid item xs={12}>
-        <TextField
-          fullWidth
-          placeholder="Buscar bebidas"
-          value={searchTerm}
-          onChange={(event) => setSearchTerm(event.target.value)}
-          InputProps={{
-            startAdornment: (
-              <InputAdornment position="start">
-                <SearchIcon fontSize="small" />
-              </InputAdornment>
-            )
-          }}
-        />
+        <Stack
+          direction={{ xs: 'column', sm: 'row' }}
+          spacing={1}
+          alignItems={{ sm: 'center' }}
+          sx={{ width: '100%' }}
+        >
+          <TextField
+            size="small"
+            placeholder="Buscar bebidas"
+            value={searchTerm}
+            onChange={(event) => setSearchTerm(event.target.value)}
+            sx={{ flex: 1, minWidth: 0 }}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon fontSize="small" color="action" />
+                </InputAdornment>
+              ),
+              endAdornment: searchTerm ? (
+                <InputAdornment position="end">
+                  <IconButton size="small" onClick={() => setSearchTerm('')} edge="end">
+                    <ClearIcon fontSize="small" />
+                  </IconButton>
+                </InputAdornment>
+              ) : null
+            }}
+          />
+          {searchTerm && (
+            <Button
+              size="small"
+              sx={{ flexShrink: 0, whiteSpace: 'nowrap' }}
+              onClick={() => setSearchTerm('')}
+            >
+              Limpiar
+            </Button>
+          )}
+        </Stack>
       </Grid>
       <Grid item xs={12}>
         <Typography variant="body2" color="text.secondary">
@@ -317,29 +374,29 @@ const DrinksPage = () => {
         <DialogTitle>{dialogTitle}</DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ mt: 1 }}>
-            <TextField
-              label="Nombre"
-              {...register('name', { required: true })}
-            />
             {isEditMode ? (
               // En edición: mostrar SKU y categoría como solo lectura
               <Stack spacing={2}>
-                <TextField
-                  label="Categoría"
-                  value={getValues('categoryName')}
-                  InputProps={{ readOnly: true }}
-                  helperText="La categoría no se puede cambiar sin modificar el SKU"
-                />
                 <TextField
                   label="SKU"
                   value={selectedDrink?.sku ?? ''}
                   InputProps={{ readOnly: true }}
                   helperText="El SKU es inmutable"
                 />
+                <TextField
+                  label="Categoría"
+                  value={selectedDrink?.categoryName ?? ''}
+                  InputProps={{ readOnly: true }}
+                  helperText="La categoría no se puede cambiar sin modificar el SKU"
+                />
               </Stack>
             ) : (
               // En creación / duplicación: selector de categoría + preview SKU
               <Stack spacing={2}>
+                <SkuPreview
+                  control={control}
+                  existingSkus={existingSkus}
+                />
                 <TextField
                   select
                   label="Categoría *"
@@ -353,21 +410,100 @@ const DrinksPage = () => {
                     </MenuItem>
                   ))}
                 </TextField>
-                <SkuPreview
-                  control={control}
-                  existingSkus={existingSkus}
-                />
               </Stack>
             )}
             <TextField
-              label="Stock inicial (u)"
-              type="number"
-              {...register('stock', { valueAsNumber: true })}
+              label="Nombre *"
+              {...register('name', { required: 'El nombre es obligatorio' })}
+              error={!!errors.name}
+              helperText={errors.name?.message as string}
+            />
+            {!isEditMode && (
+              <TextField
+                label="ID Producto (Qmarero)"
+                {...register('productId')}
+                helperText="ID del producto en Qmarero. Si no se especifica, se usará 'S/PID'"
+              />
+            )}
+            <TextField
+              label="Descripción"
+              {...register('description')}
+              helperText="Si no se especifica, se usará el nombre"
+            />
+            <Controller
+              control={control}
+              name="stock"
+              rules={{
+                required: 'El stock inicial es obligatorio',
+                min: { value: 0, message: 'El stock debe ser mayor o igual a 0' },
+                validate: (value) => {
+                  if (value !== 0 && value !== Math.floor(value)) {
+                    return 'El stock debe ser un número entero';
+                  }
+                  return true;
+                }
+              }}
+              render={({ field: { onChange, value, ...field }, fieldState: { error } }) => (
+                <TextField
+                  {...field}
+                  label="Stock inicial (u) *"
+                  type="number"
+                  inputProps={{ min: 0, step: 1 }}
+                  value={value === 0 ? '' : value ?? ''}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (val === '') {
+                      onChange(0);
+                    } else {
+                      // Redondear a entero
+                      const intValue = Math.floor(Number(val));
+                      onChange(intValue);
+                    }
+                  }}
+                  error={!!error}
+                  helperText={error?.message}
+                />
+              )}
+            />
+            <Controller
+              control={control}
+              name="reorderPoint"
+              rules={{
+                required: 'El punto de pedido es obligatorio',
+                min: { value: 0, message: 'El punto de pedido debe ser mayor o igual a 0' },
+                validate: (value) => {
+                  if (value !== 0 && value !== Math.floor(value)) {
+                    return 'El punto de pedido debe ser un número entero';
+                  }
+                  return true;
+                }
+              }}
+              render={({ field: { onChange, value, ...field }, fieldState: { error } }) => (
+                <TextField
+                  {...field}
+                  label="Punto de pedido (u) *"
+                  type="number"
+                  inputProps={{ min: 0, step: 1 }}
+                  value={value === 0 ? '' : value ?? ''}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (val === '') {
+                      onChange(0);
+                    } else {
+                      // Redondear a entero
+                      const intValue = Math.floor(Number(val));
+                      onChange(intValue);
+                    }
+                  }}
+                  error={!!error}
+                  helperText={error?.message}
+                />
+              )}
             />
             <TextField
-              label="Punto de pedido (u)"
-              type="number"
-              {...register('reorderPoint', { valueAsNumber: true })}
+              label="Código artículo compra"
+              {...register('codeArticlePurchase')}
+              helperText="Si no se especifica, se usará 'S/C'"
             />
             <Controller
               control={control}
@@ -399,7 +535,6 @@ const DrinksPage = () => {
                 />
               )}
             />
-            <TextField label="Código artículo compra" {...register('codeArticlePurchase')} />
           </Stack>
         </DialogContent>
         <DialogActions>
@@ -413,7 +548,19 @@ const DrinksPage = () => {
       <Dialog open={Boolean(confirmDelete)} onClose={() => setConfirmDelete(null)} maxWidth="xs" fullWidth>
         <DialogTitle>Confirmar eliminación</DialogTitle>
         <DialogContent>
-          <Typography>¿Estás seguro de que deseas eliminar la bebida "{confirmDelete?.name}"?</Typography>
+          <Stack spacing={2}>
+            <Typography>
+              ¿Estás seguro de que deseas eliminar la bebida "{confirmDelete?.name}"?
+            </Typography>
+            <Alert severity="warning">
+              <Typography variant="body2" fontWeight="bold" gutterBottom>
+                Advertencia: Esta acción es irreversible
+              </Typography>
+              <Typography variant="body2">
+                La eliminación de esta bebida afectará los cálculos del inventario y las operaciones relacionadas.
+              </Typography>
+            </Alert>
+          </Stack>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setConfirmDelete(null)}>Cancelar</Button>

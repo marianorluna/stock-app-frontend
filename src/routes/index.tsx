@@ -20,13 +20,16 @@ export const AppRoutes = () => {
   // Inicializa el snapshot del inventario y registra listeners de websocket cuando el usuario está autenticado
   useEffect(() => {
     if (user) {
-      fetchSnapshot();
+      // Solo intentar cargar el snapshot si el usuario tiene el permiso necesario
+      if (hasPermission('inventory', 'read')) {
+        fetchSnapshot();
+      }
       const cleanup = registerSocketListeners(socketClient);
       return () => {
         cleanup();
       };
     }
-  }, [user, fetchSnapshot, registerSocketListeners]);
+  }, [user, fetchSnapshot, registerSocketListeners, hasPermission]);
 
   const otherRoutes = createOtherRoutes(hasRole, hasPermission, hasAnyRole);
 
