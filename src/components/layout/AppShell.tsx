@@ -106,8 +106,14 @@ const AppShell = ({ children }: AppShellProps) => {
     try {
       const { data } = await apiClient.get<{ unreadCount: number }>('/notifications/unread-count');
       setUnreadCount(data.unreadCount);
-    } catch (error) {
-      console.error('Error obteniendo contador de notificaciones:', error);
+    } catch (error: any) {
+      // Solo registrar errores que no sean 401 (no autenticado/sin permisos)
+      // El 401 es esperado cuando el usuario no está autenticado o no tiene permisos
+      if (error.response?.status !== 401) {
+        console.error('Error obteniendo contador de notificaciones:', error);
+      }
+      // Si es 401, simplemente no actualizamos el contador (se mantiene en 0)
+      setUnreadCount(0);
     }
   }, [canAccessInventory]);
 
@@ -151,6 +157,22 @@ const AppShell = ({ children }: AppShellProps) => {
       socketClient.off('stock_update_completed', handleStockUpdateCompleted);
     };
   }, [setIsUpdatingStock]);
+
+  // Escuchar nuevas notificaciones vía WebSocket para actualizar el contador
+  useEffect(() => {
+    if (!canAccessInventory) return;
+
+    const handleNotification = () => {
+      // Actualizar el contador inmediatamente cuando llega una nueva notificación
+      fetchUnreadCount();
+    };
+
+    socketClient.on('notification', handleNotification);
+
+    return () => {
+      socketClient.off('notification', handleNotification);
+    };
+  }, [canAccessInventory, fetchUnreadCount]);
 
   const navLinks = getNavLinks(hasPermission);
   const trailingLinks = getTrailingLinks(hasPermission);

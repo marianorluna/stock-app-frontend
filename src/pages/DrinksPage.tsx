@@ -147,9 +147,10 @@ const SkuPreview = ({
 };
 
 const DrinksPage = () => {
-  const { beverages, fetchBeverages, error } = useInventoryStore((state) => ({
+  const { beverages, fetchBeverages, fetchSnapshot, error } = useInventoryStore((state) => ({
     beverages: state.beverages,
     fetchBeverages: state.fetchBeverages,
+    fetchSnapshot: state.fetchSnapshot,
     error: state.error
   }));
 
@@ -262,7 +263,8 @@ const DrinksPage = () => {
     }
     setOpen(false);
     setSelectedDrink(null);
-    await fetchBeverages();
+    // Actualizar tanto la lista como el snapshot del inventario
+    await Promise.all([fetchBeverages(), fetchSnapshot()]);
   });
 
   const dialogTitle = dialogMode === 'edit' ? 'Editar bebida' : 'Crear nueva bebida';
