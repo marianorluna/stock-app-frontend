@@ -73,6 +73,7 @@ type CreatedPurchase = {
   supplier: string | null;
   date: string;
   ingredientItemsCount: number;
+  beverageItemsCount?: number;
   totalItemsInInvoice: number;
 };
 
@@ -332,10 +333,21 @@ const PurchasesPage = () => {
         const supplierName = (supplierNameBySku.get(p.supplier ?? '') ?? '').toLowerCase();
         if (invoiceNum.includes(q) || supplierRaw.includes(q) || supplierName.includes(q)) return true;
         return p.items.some(item => {
-          const name = typeof item.ingredient === 'object' && item.ingredient !== null
-            ? ((item.ingredient as { name?: string }).name ?? '').toLowerCase()
-            : '';
-          return name.includes(q);
+          // Buscar en ingredientes
+          if (item.ingredient) {
+            const name = typeof item.ingredient === 'object' && item.ingredient !== null
+              ? ((item.ingredient as { name?: string }).name ?? '').toLowerCase()
+              : '';
+            if (name.includes(q)) return true;
+          }
+          // Buscar en bebidas
+          if (item.beverage) {
+            const name = typeof item.beverage === 'object' && item.beverage !== null
+              ? ((item.beverage as { name?: string }).name ?? '').toLowerCase()
+              : '';
+            if (name.includes(q)) return true;
+          }
+          return false;
         });
       });
     }
@@ -858,10 +870,16 @@ const PurchasesPage = () => {
                             {p.supplier ? ` · ${p.supplier}` : ''}
                           </Typography>
                           <Chip
-                            label={`${p.ingredientItemsCount}/${p.totalItemsInInvoice} items de ingredientes`}
+                            label={(() => {
+                              const matched = p.ingredientItemsCount + (p.beverageItemsCount ?? 0);
+                              const parts: string[] = [];
+                              if (p.ingredientItemsCount > 0) parts.push(`${p.ingredientItemsCount} ing`);
+                              if ((p.beverageItemsCount ?? 0) > 0) parts.push(`${p.beverageItemsCount} beb`);
+                              return `${matched}/${p.totalItemsInInvoice} items${parts.length > 0 ? ` (${parts.join(' + ')})` : ''}`;
+                            })()}
                             size="small"
                             variant="outlined"
-                            color={p.ingredientItemsCount > 0 ? 'success' : 'default'}
+                            color={(p.ingredientItemsCount + (p.beverageItemsCount ?? 0)) > 0 ? 'success' : 'default'}
                           />
                         </Stack>
                       ))}
@@ -970,10 +988,7 @@ const PurchasesPage = () => {
             </Typography>
             <Box component="ul" sx={{ pl: 2.5, m: 0, '& li': { mb: 0.5 } }}>
               <li>
-                <Typography variant="body2">Se restará del stock de cada ingrediente la cantidad que se sumó al registrar esta compra.</Typography>
-              </li>
-              <li>
-                <Typography variant="body2">Se restará del stock de las bebidas correspondientes.</Typography>
+                <Typography variant="body2">Se restará del stock de cada ingrediente y bebida la cantidad que se sumó al registrar esta compra.</Typography>
               </li>
               <li>
                 <Typography variant="body2">Se eliminará el registro de la base de datos, permitiendo volver a subir esta factura en otro momento.</Typography>
@@ -1098,36 +1113,110 @@ const PurchasesPage = () => {
                     <Stack spacing={1}>
                       <Typography variant="subtitle2" color="text.secondary">Items:</Typography>
                       {purchase.items.slice(0, ITEMS_VISIBLE).map((item, index) => {
-                        const ingredientName =
-                          typeof item.ingredient === 'string'
-                            ? 'Ingrediente desconocido'
-                            : item.ingredient?.name || 'Ingrediente desconocido';
-                        return (
-                          <Box key={index}>
-                            <Typography variant="body2">
-                              • {ingredientName}: {item.quantityInGrams}g
-                              {item.unitPrice && ` - $${item.unitPrice.toFixed(2)}`}
-                            </Typography>
-                          </Box>
-                        );
+                        // Manejar ingredientes
+                        if (item.ingredient) {
+                          const ingredientName =
+                            typeof item.ingredient === 'string'
+                              ? 'Ingrediente desconocido'
+                              : item.ingredient?.name || 'Ingrediente desconocido';
+                          return (
+                            <Box key={index}>
+                              <Typography variant="body2">
+                                • {ingredientName}: {item.quantityInGrams}g
+                                {item.unitPrice && ` - $${item.unitPrice.toFixed(2)}`}
+                              </Typography>
+                            </Box>
+                          );
+                        }
+                        // Manejar bebidas
+                        if (item.beverage) {
+                          const beverageName =
+                            typeof item.beverage === 'string'
+                              ? 'Bebida desconocida'
+                              : item.beverage?.name || 'Bebida desconocida';
+                          return (
+                            <Box key={index}>
+                              <Typography variant="body2">
+                                • {beverageName}: {item.quantityInUnits}u
+                                {item.unitPrice && ` - $${item.unitPrice.toFixed(2)}`}
+                              </Typography>
+                            </Box>
+                          );
+                        }
+                        // Manejar items sin match
+                        if (item.unmatchedItem) {
+                          const u = item.unmatchedItem;
+                          const cantidad = u.cantidadTotalGramos > 0
+                            ? `${u.cantidadTotalGramos}g`
+                            : `${u.cantidadFactura} ${u.unidadFactura || 'uni'}`;
+                          return (
+                            <Box key={index}>
+                              <Typography variant="body2" sx={{ color: 'warning.main', fontStyle: 'italic' }}>
+                                ⚠ {u.descripcionArticulo || `Cód: ${u.codigoArticulo}`}: {cantidad}
+                                {item.unitPrice ? ` - $${item.unitPrice.toFixed(2)}` : ''}
+                              </Typography>
+                              <Typography variant="caption" color="text.disabled" sx={{ ml: 2, display: 'block' }}>
+                                Sin match · agregar manualmente
+                              </Typography>
+                            </Box>
+                          );
+                        }
+                        return null;
                       })}
                       {purchase.items.length > ITEMS_VISIBLE && (
                         <>
                           <Collapse in={expandedItems.has(purchase._id)}>
                             <Stack spacing={1}>
                               {purchase.items.slice(ITEMS_VISIBLE).map((item, index) => {
-                                const ingredientName =
-                                  typeof item.ingredient === 'string'
-                                    ? 'Ingrediente desconocido'
-                                    : item.ingredient?.name || 'Ingrediente desconocido';
-                                return (
-                                  <Box key={index}>
-                                    <Typography variant="body2">
-                                      • {ingredientName}: {item.quantityInGrams}g
-                                      {item.unitPrice && ` - $${item.unitPrice.toFixed(2)}`}
-                                    </Typography>
-                                  </Box>
-                                );
+                                // Manejar ingredientes
+                                if (item.ingredient) {
+                                  const ingredientName =
+                                    typeof item.ingredient === 'string'
+                                      ? 'Ingrediente desconocido'
+                                      : item.ingredient?.name || 'Ingrediente desconocido';
+                                  return (
+                                    <Box key={index}>
+                                      <Typography variant="body2">
+                                        • {ingredientName}: {item.quantityInGrams}g
+                                        {item.unitPrice && ` - $${item.unitPrice.toFixed(2)}`}
+                                      </Typography>
+                                    </Box>
+                                  );
+                                }
+                                // Manejar bebidas
+                                if (item.beverage) {
+                                  const beverageName =
+                                    typeof item.beverage === 'string'
+                                      ? 'Bebida desconocida'
+                                      : item.beverage?.name || 'Bebida desconocida';
+                                  return (
+                                    <Box key={index}>
+                                      <Typography variant="body2">
+                                        • {beverageName}: {item.quantityInUnits}u
+                                        {item.unitPrice && ` - $${item.unitPrice.toFixed(2)}`}
+                                      </Typography>
+                                    </Box>
+                                  );
+                                }
+                                // Manejar items sin match
+                                if (item.unmatchedItem) {
+                                  const u = item.unmatchedItem;
+                                  const cantidad = u.cantidadTotalGramos > 0
+                                    ? `${u.cantidadTotalGramos}g`
+                                    : `${u.cantidadFactura} ${u.unidadFactura || 'uni'}`;
+                                  return (
+                                    <Box key={index}>
+                                      <Typography variant="body2" sx={{ color: 'warning.main', fontStyle: 'italic' }}>
+                                        ⚠ {u.descripcionArticulo || `Cód: ${u.codigoArticulo}`}: {cantidad}
+                                        {item.unitPrice ? ` - $${item.unitPrice.toFixed(2)}` : ''}
+                                      </Typography>
+                                      <Typography variant="caption" color="text.disabled" sx={{ ml: 2, display: 'block' }}>
+                                        Sin match · agregar manualmente
+                                      </Typography>
+                                    </Box>
+                                  );
+                                }
+                                return null;
                               })}
                             </Stack>
                           </Collapse>

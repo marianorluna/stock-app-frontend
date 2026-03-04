@@ -190,15 +190,27 @@ export const useInventoryStore = create<InventoryState>()(
         void get().fetchSnapshot();
         void get().fetchManualLogs();
       };
+      const handleIngredientUpdate = () => {
+        void get().fetchSnapshot();
+        void get().fetchIngredients();
+      };
+      const handleBeverageUpdate = () => {
+        void get().fetchSnapshot();
+        void get().fetchBeverages();
+      };
 
       socket.on('inventory:sale', handleSale);
       socket.on('inventory:purchase', handlePurchase);
       socket.on('inventory:wastage', handleWastage);
+      socket.on('inventory:ingredient_updated', handleIngredientUpdate);
+      socket.on('inventory:beverage_updated', handleBeverageUpdate);
 
       return () => {
         socket.off('inventory:sale', handleSale);
         socket.off('inventory:purchase', handlePurchase);
         socket.off('inventory:wastage', handleWastage);
+        socket.off('inventory:ingredient_updated', handleIngredientUpdate);
+        socket.off('inventory:beverage_updated', handleBeverageUpdate);
       };
     },
     //obtiene los registros manuales de ventas, compras y mermas con filtros opcionales

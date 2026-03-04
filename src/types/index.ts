@@ -82,8 +82,10 @@ export type ManualPurchasePayload = {
   supplier?: string;
   invoiceNumber?: string;
   items: Array<{
-    ingredient: string;
-    quantityInGrams: number;
+    ingredient?: string;
+    beverage?: string;
+    quantityInGrams?: number;
+    quantityInUnits?: number;
     unitPrice: number;
   }>;
 };
@@ -150,20 +152,30 @@ export type SaleRecord = {
   metadata?: Record<string, unknown>;
 };
 
+type BeverageReference = string | { _id: string; name: string };
+
 export type PurchaseRecord = {
   _id: string;
   timestamp: string;
   supplier?: string;
   invoiceNumber?: string;
   items: Array<{
-    ingredient: IngredientReference;
-    quantityInGrams: number;
+    ingredient?: IngredientReference;
+    beverage?: BeverageReference;
+    quantityInGrams?: number;
+    quantityInUnits?: number;
+    unmatchedItem?: {
+      codigoArticulo: string;
+      descripcionArticulo?: string | null;
+      cantidadFactura: number;
+      cantidadTotalGramos: number;
+      unidadFactura?: string | null;
+      razon: string;
+    };
     unitPrice: number;
   }>;
   metadata?: Record<string, unknown>;
 };
-
-type BeverageReference = string | { _id: string; name: string };
 
 export type WastageRecord = {
   _id: string;

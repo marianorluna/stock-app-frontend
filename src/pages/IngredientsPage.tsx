@@ -156,9 +156,10 @@ const SkuPreview = ({
 };
 
 const IngredientsPage = () => {
-  const { ingredients, fetchIngredients, error } = useInventoryStore((state) => ({
+  const { ingredients, fetchIngredients, fetchSnapshot, error } = useInventoryStore((state) => ({
     ingredients: state.ingredients,
     fetchIngredients: state.fetchIngredients,
+    fetchSnapshot: state.fetchSnapshot,
     error: state.error
   }));
   const [open, setOpen] = useState(false);
@@ -281,7 +282,8 @@ const IngredientsPage = () => {
     }
     setOpen(false);
     setSelectedIngredient(null);
-    await fetchIngredients();
+    // Actualizar tanto la lista como el snapshot del inventario
+    await Promise.all([fetchIngredients(), fetchSnapshot()]);
   });
 
   const dialogTitle = dialogMode === 'edit' ? 'Editar ingrediente' : 'Crear nuevo ingrediente';
