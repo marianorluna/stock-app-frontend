@@ -20,7 +20,9 @@ import {
   Divider,
   CircularProgress,
   Collapse,
-  Badge
+  Badge,
+  Snackbar,
+  Alert
 } from '@mui/material';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import BarChartIcon from '@mui/icons-material/BarChart';
@@ -38,12 +40,14 @@ import PointOfSaleIcon from '@mui/icons-material/PointOfSale';
 import NotificationsIcon from '@mui/icons-material/Notifications';
 import ExpandLess from '@mui/icons-material/ExpandLess';
 import ExpandMore from '@mui/icons-material/ExpandMore';
+import SettingsIcon from '@mui/icons-material/Settings';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useTheme } from '@mui/material/styles';
 import { useAuth } from '../../contexts/AuthContext';
 import { RequirePermission } from '../auth/RequirePermission';
 import { useInventoryStore } from '../../hooks/useInventoryStore';
 import apiClient from '../../services/apiClient';
+import socketClient from '../../services/socketClient';
 
 type AppShellProps = {
   children: ReactNode;
@@ -52,26 +56,26 @@ type AppShellProps = {
 //enlaces de navegación que se mostrarán según permisos
 const getNavLinks = (hasPermission: (resource: string, action: string) => boolean) => {
   const links = [];
-  
+
   if (hasPermission('dashboard', 'read')) {
     links.push({ label: 'Dashboard', icon: <DashboardIcon fontSize="small" />, to: '/dashboard' });
   }
-  
+
   return links;
 };
 
 //enlaces que se mostrarán según permisos del usuario
 const getTrailingLinks = (hasPermission: (resource: string, action: string) => boolean) => {
   const links = [];
-  
+
   if (hasPermission('suppliers', 'read')) {
     links.push({ label: 'Proveedores', icon: <StoreIcon fontSize="small" />, to: '/suppliers' });
   }
-  
+
   if (hasPermission('manual', 'read')) {
     links.push({ label: 'Registro Manual', icon: <PlaylistAddIcon fontSize="small" />, to: '/manual' });
   }
-  
+
   return links;
 };
 
@@ -86,22 +90,30 @@ const AppShell = ({ children }: AppShellProps) => {
   const [inventoryMenuOpen, setInventoryMenuOpen] = useState(false);
   const [productsMenuOpen, setProductsMenuOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
-  const { loading, loadingMessage } = useInventoryStore((state) => ({
+  const { loading, loadingMessage, isUpdatingStock, setIsUpdatingStock } = useInventoryStore((state) => ({
     loading: state.loading,
-    loadingMessage: state.loadingMessage
+    loadingMessage: state.loadingMessage,
+    isUpdatingStock: state.isUpdatingStock,
+    setIsUpdatingStock: state.setIsUpdatingStock
   }));
-  
+
   const canAccessInventory = hasAnyRole(['admin', 'manager']);
 
   // Obtener contador de notificaciones no leídas
   const fetchUnreadCount = useCallback(async () => {
     if (!canAccessInventory) return;
-    
+
     try {
       const { data } = await apiClient.get<{ unreadCount: number }>('/notifications/unread-count');
       setUnreadCount(data.unreadCount);
-    } catch (error) {
-      console.error('Error obteniendo contador de notificaciones:', error);
+    } catch (error: any) {
+      // Solo registrar errores que no sean 401 (no autenticado/sin permisos)
+      // El 401 es esperado cuando el usuario no está autenticado o no tiene permisos
+      if (error.response?.status !== 401) {
+        console.error('Error obteniendo contador de notificaciones:', error);
+      }
+      // Si es 401, simplemente no actualizamos el contador (se mantiene en 0)
+      setUnreadCount(0);
     }
   }, [canAccessInventory]);
 
@@ -126,7 +138,42 @@ const AppShell = ({ children }: AppShellProps) => {
         });
     }
   }, [location.pathname, canAccessInventory, unreadCount]);
-  
+
+  // Escuchar eventos de actualización automática de stock via WebSocket
+  useEffect(() => {
+    const handleStockUpdateStarted = () => {
+      setIsUpdatingStock(true);
+    };
+
+    const handleStockUpdateCompleted = () => {
+      setIsUpdatingStock(false);
+    };
+
+    socketClient.on('stock_update_started', handleStockUpdateStarted);
+    socketClient.on('stock_update_completed', handleStockUpdateCompleted);
+
+    return () => {
+      socketClient.off('stock_update_started', handleStockUpdateStarted);
+      socketClient.off('stock_update_completed', handleStockUpdateCompleted);
+    };
+  }, [setIsUpdatingStock]);
+
+  // Escuchar nuevas notificaciones vía WebSocket para actualizar el contador
+  useEffect(() => {
+    if (!canAccessInventory) return;
+
+    const handleNotification = () => {
+      // Actualizar el contador inmediatamente cuando llega una nueva notificación
+      fetchUnreadCount();
+    };
+
+    socketClient.on('notification', handleNotification);
+
+    return () => {
+      socketClient.off('notification', handleNotification);
+    };
+  }, [canAccessInventory, fetchUnreadCount]);
+
   const navLinks = getNavLinks(hasPermission);
   const trailingLinks = getTrailingLinks(hasPermission);
 
@@ -165,15 +212,15 @@ const AppShell = ({ children }: AppShellProps) => {
           </Typography>
           {user && isMobile && (
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, ml: 2 }}>
-              <Chip 
-                label={user.role.toUpperCase()} 
-                size="small" 
+              <Chip
+                label={user.role.toUpperCase()}
+                size="small"
                 color={user.role === 'admin' ? 'error' : user.role === 'manager' ? 'warning' : 'default'}
               />
               <IconButton onClick={handleOpenUserMenu} size="small">
-                <Badge 
-                  badgeContent={canAccessInventory ? unreadCount : 0} 
-                  color="error" 
+                <Badge
+                  badgeContent={canAccessInventory ? unreadCount : 0}
+                  color="error"
                   max={99}
                   anchorOrigin={{
                     vertical: 'bottom',
@@ -193,7 +240,7 @@ const AppShell = ({ children }: AppShellProps) => {
                   <ListItemText primary={user.name} secondary={user.email} />
                 </MenuItem>
                 {canAccessInventory && (
-                  <MenuItem 
+                  <MenuItem
                     component={Link}
                     to="/notifications"
                     onClick={() => {
@@ -241,7 +288,7 @@ const AppShell = ({ children }: AppShellProps) => {
                     {canAccessInventory && (
                       <>
                         <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                          <ListItemButton 
+                          <ListItemButton
                             component={Link}
                             to="/inventory"
                             selected={location.pathname === '/inventory' || location.pathname.startsWith('/inventory/')}
@@ -290,7 +337,7 @@ const AppShell = ({ children }: AppShellProps) => {
                     )}
                     <RequirePermission resource="ingredients" action="read" hide>
                       <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                        <ListItemButton 
+                        <ListItemButton
                           component={Link}
                           to="/products"
                           selected={location.pathname === '/products' || location.pathname.startsWith('/ingredients') || location.pathname.startsWith('/recipes') || location.pathname.startsWith('/drinks')}
@@ -324,19 +371,19 @@ const AppShell = ({ children }: AppShellProps) => {
                             </ListItemButton>
                           </RequirePermission>
                           <RequirePermission resource="recipes" action="read" hide>
+                            <ListItemButton component={Link} to="/drinks" selected={location.pathname === '/drinks'} onClick={toggleDrawer(false)}>
+                              <ListItemIcon sx={{ minWidth: 32 }}>
+                                <LocalCafeIcon fontSize="small" />
+                              </ListItemIcon>
+                              <ListItemText primary="Bebidas" />
+                            </ListItemButton>
+                          </RequirePermission>
+                          <RequirePermission resource="recipes" action="read" hide>
                             <ListItemButton component={Link} to="/recipes" selected={location.pathname === '/recipes'} onClick={toggleDrawer(false)}>
                               <ListItemIcon sx={{ minWidth: 32 }}>
                                 <ReceiptLongIcon fontSize="small" />
                               </ListItemIcon>
                               <ListItemText primary="Recetas" />
-                            </ListItemButton>
-                          </RequirePermission>
-                          <RequirePermission resource="recipes" action="read" hide>
-                            <ListItemButton component={Link} to="/drinks" selected={location.pathname === '/drinks'} onClick={toggleDrawer(false)}>
-                              <ListItemIcon sx={{ minWidth: 32 }}>
-                                <LocalCafeIcon fontSize="small" />
-                              </ListItemIcon>
-                              <ListItemText primary="Bebidas y café" />
                             </ListItemButton>
                           </RequirePermission>
                         </List>
@@ -349,7 +396,7 @@ const AppShell = ({ children }: AppShellProps) => {
                       </ListItemButton>
                     ))}
                     {canAccessInventory && (
-                      <ListItemButton 
+                      <ListItemButton
                         component={Link}
                         to="/notifications"
                         selected={location.pathname === '/notifications'}
@@ -364,6 +411,19 @@ const AppShell = ({ children }: AppShellProps) => {
                           </Badge>
                         </ListItemIcon>
                         <ListItemText primary="Notificaciones" />
+                      </ListItemButton>
+                    )}
+                    {hasPermission('config', 'read') && (
+                      <ListItemButton
+                        component={Link}
+                        to="/configuraciones"
+                        selected={location.pathname === '/configuraciones' || location.pathname.startsWith('/configuraciones/')}
+                        onClick={toggleDrawer(false)}
+                      >
+                        <ListItemIcon>
+                          <SettingsIcon fontSize="small" />
+                        </ListItemIcon>
+                        <ListItemText primary="Configuraciones" />
                       </ListItemButton>
                     )}
                   </List>
@@ -400,9 +460,9 @@ const AppShell = ({ children }: AppShellProps) => {
                   startIcon={<KitchenIcon fontSize="small" />}
                   variant={
                     location.pathname === '/products' ||
-                    location.pathname === '/ingredients' ||
-                    location.pathname === '/recipes' ||
-                    location.pathname === '/drinks'
+                      location.pathname === '/ingredients' ||
+                      location.pathname === '/recipes' ||
+                      location.pathname === '/drinks'
                       ? 'contained'
                       : 'text'
                   }
@@ -436,19 +496,29 @@ const AppShell = ({ children }: AppShellProps) => {
                   </Badge>
                 </IconButton>
               )}
+              {hasPermission('config', 'read') && (
+                <Button
+                  component={Link}
+                  to="/configuraciones"
+                  startIcon={<SettingsIcon fontSize="small" />}
+                  variant={location.pathname === '/configuraciones' || location.pathname.startsWith('/configuraciones/') ? 'contained' : 'text'}
+                >
+                  Configuraciones
+                </Button>
+              )}
               {user && (
                 <>
                   <Divider orientation="vertical" flexItem sx={{ mx: 1, height: 24 }} />
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <Chip 
-                      label={user.role.toUpperCase()} 
-                      size="small" 
+                    <Chip
+                      label={user.role.toUpperCase()}
+                      size="small"
                       color={user.role === 'admin' ? 'error' : user.role === 'manager' ? 'warning' : 'default'}
                     />
                     <IconButton onClick={handleOpenUserMenu} size="small">
-                      <Badge 
-                        badgeContent={canAccessInventory ? unreadCount : 0} 
-                        color="error" 
+                      <Badge
+                        badgeContent={canAccessInventory ? unreadCount : 0}
+                        color="error"
                         max={99}
                         anchorOrigin={{
                           vertical: 'bottom',
@@ -468,7 +538,7 @@ const AppShell = ({ children }: AppShellProps) => {
                         <ListItemText primary={user.name} secondary={user.email} />
                       </MenuItem>
                       {canAccessInventory && (
-                        <MenuItem 
+                        <MenuItem
                           component={Link}
                           to="/notifications"
                           onClick={() => {
@@ -528,6 +598,21 @@ const AppShell = ({ children }: AppShellProps) => {
           )}
         </Box>
       )}
+
+      {/* Toast de actualización automática de stock en curso */}
+      <Snackbar
+        open={isUpdatingStock}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+        sx={{ mb: 2 }}
+      >
+        <Alert
+          severity="info"
+          icon={<CircularProgress size={18} color="inherit" />}
+          sx={{ width: '100%', alignItems: 'center' }}
+        >
+          Actualización automática de stock en curso. Las operaciones manuales están temporalmente bloqueadas.
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };

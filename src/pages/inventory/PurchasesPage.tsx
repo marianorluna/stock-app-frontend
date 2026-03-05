@@ -1,130 +1,369 @@
-import { useState, useEffect, ChangeEvent, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Alert,
   Box,
   Button,
   Card,
   CardContent,
+  Chip,
   CircularProgress,
+  Collapse,
+  Divider,
   Grid,
+  IconButton,
+  LinearProgress,
+  List,
+  ListItem,
+  ListItemText,
   Stack,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
   TextField,
   Typography,
-  Divider,
-  IconButton,
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
-  List,
-  ListItem,
-  ListItemText,
-  Chip
+  InputAdornment
 } from '@mui/material';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
-import UploadFileIcon from '@mui/icons-material/UploadFile';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
+import SyncIcon from '@mui/icons-material/Sync';
+import SettingsIcon from '@mui/icons-material/Settings';
+import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
+import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
+import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
+import WarningAmberIcon from '@mui/icons-material/WarningAmber';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+import SearchIcon from '@mui/icons-material/Search';
+import ClearIcon from '@mui/icons-material/Clear';
 import { useInventoryStore } from '../../hooks/useInventoryStore';
+import { useAuth } from '../../contexts/AuthContext';
 import type { PurchaseRecord } from '../../types';
 import apiClient from '../../services/apiClient';
+
+// ─── Types para el flujo de actualización de stock ───────────────────────────
+
+type UpdateStep = {
+  step: number | string;
+  name: string;
+  success: boolean;
+  error?: string;
+  details?: Record<string, number>;
+};
+
+type UnmatchedItem = {
+  codigoArticulo: string;
+  descripcionArticulo?: string | null;
+  cantidadFactura: number;
+  cantidadTotalGramos: number;
+  razon: string;
+};
+
+type CreatedPurchase = {
+  id: string;
+  invoiceNumber: string | null;
+  supplier: string | null;
+  date: string;
+  ingredientItemsCount: number;
+  beverageItemsCount?: number;
+  totalItemsInInvoice: number;
+};
+
+type UpdateStockResult = {
+  success: boolean;
+  noNewInvoices?: boolean;
+  isDuplicateInvoice?: boolean;
+  message?: string;
+  steps?: UpdateStep[];
+  createdPurchases?: CreatedPurchase[];
+  updatedIngredients?: {
+    name: string;
+    sku: string;
+    stockAnterior: number;
+    stockSumado: number;
+    stockNuevo: number;
+  }[];
+  updatedBeverages?: {
+    name: string;
+    sku: string;
+    stockAnterior: number;
+    stockSumado: number;
+    stockNuevo: number;
+  }[];
+  unmatchedItems?: UnmatchedItem[];
+  summary?: Record<string, number>;
+};
+
+// ─── DateFilterInput ─────────────────────────────────────────────────────────
+// Input de fecha compacto (DD-MMM-AA) que abre el selector nativo del navegador.
+
+const formatShortDate = (iso: string): string => {
+  const d = new Date(iso + 'T12:00:00');
+  const day = d.getDate().toString().padStart(2, '0');
+  const month = d.toLocaleDateString('es-ES', { month: 'short' }).replace('.', '');
+  const year = d.getFullYear().toString().slice(-2);
+  return `${day}-${month}-${year}`;
+};
+
+const DateFilterInput = ({
+  label,
+  value,
+  onChange
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+}) => {
+  const nativeRef = useRef<HTMLInputElement>(null);
+  const handleClick = () => {
+    try { nativeRef.current?.showPicker?.(); } catch { /* ignorar */ }
+  };
+  return (
+    <Box sx={{ position: 'relative', width: '100%' }}>
+      <TextField
+        size="small"
+        label={label}
+        value={value ? formatShortDate(value) : ''}
+        placeholder="DD-MMM-AA"
+        InputLabelProps={{ shrink: true }}
+        onClick={handleClick}
+        inputProps={{ readOnly: true, style: { cursor: 'pointer', fontSize: '0.8rem' } }}
+        sx={{ width: '100%' }}
+        InputProps={{
+          endAdornment: value ? (
+            <InputAdornment position="end">
+              <IconButton
+                size="small"
+                onClick={(e) => { e.stopPropagation(); onChange(''); }}
+                edge="end"
+                sx={{ mr: -0.75 }}
+              >
+                <ClearIcon sx={{ fontSize: 14 }} />
+              </IconButton>
+            </InputAdornment>
+          ) : null
+        }}
+      />
+      <input
+        ref={nativeRef}
+        type="date"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        style={{ position: 'absolute', opacity: 0, width: 0, height: 0, pointerEvents: 'none' }}
+      />
+    </Box>
+  );
+};
+
+// ─── Componente principal ─────────────────────────────────────────────────────
 
 const PurchasesPage = () => {
   const {
     purchasesLog,
     logsLoading,
-    manualFilters,
     fetchManualLogs,
-    setManualFilters,
-    fetchSnapshot
+    fetchSnapshot,
+    suppliers,
+    fetchSuppliers
   } = useInventoryStore((state) => ({
     purchasesLog: state.purchasesLog,
     logsLoading: state.logsLoading,
-    manualFilters: state.manualFilters,
     fetchManualLogs: state.fetchManualLogs,
-    setManualFilters: state.setManualFilters,
-    fetchSnapshot: state.fetchSnapshot
+    fetchSnapshot: state.fetchSnapshot,
+    suppliers: state.suppliers,
+    fetchSuppliers: state.fetchSuppliers
   }));
 
-  const [dateFrom, setDateFrom] = useState<string>(
-    manualFilters.from || ''
-  );
-  const [dateTo, setDateTo] = useState<string>(
-    manualFilters.to || ''
-  );
+  const { hasAnyRole } = useAuth();
+  const canUpdateStock = hasAnyRole(['admin', 'manager']);
+
+  // Ref para el input de archivo PDF oculto
+  const pdfInputRef = useRef<HTMLInputElement>(null);
+
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [allPurchasesData, setAllPurchasesData] = useState<PurchaseRecord[]>([]);
   const [initialLoad, setInitialLoad] = useState<boolean>(true);
-  const [uploading, setUploading] = useState<boolean>(false);
-  const [previewOpen, setPreviewOpen] = useState<boolean>(false);
-  const [previewData, setPreviewData] = useState<any>(null);
-  const [currentInvoiceId, setCurrentInvoiceId] = useState<string | null>(null);
-  const [confirming, setConfirming] = useState<boolean>(false);
-  const [processingPdfs, setProcessingPdfs] = useState<boolean>(false);
-  const [pdfPreviewOpen, setPdfPreviewOpen] = useState<boolean>(false);
-  const [pdfPreviewData, setPdfPreviewData] = useState<any>(null);
-  const [pdfInvoiceIds, setPdfInvoiceIds] = useState<string[]>([]);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // ── Estados para el flujo de actualización de stock (bucket o PDF cargado) ─
+  // 'bucket' → botón Actualizar (lee del bucket GCS)
+  // 'pdf'    → botón Cargar PDF (usa el archivo seleccionado)
+  const [updateMode, setUpdateMode] = useState<'bucket' | 'pdf'>('bucket');
+  const [selectedPdf, setSelectedPdf] = useState<File | null>(null);
+  const [pdfFileError, setPdfFileError] = useState<string | null>(null);
+
+  const [updateConfirmOpen, setUpdateConfirmOpen] = useState(false);
+  const [updateLoading, setUpdateLoading] = useState(false);
+  const [updateResult, setUpdateResult] = useState<UpdateStockResult | null>(null);
+  const [updateResultOpen, setUpdateResultOpen] = useState(false);
+
+  // ── Estados para dialog de configuraciones ───────────────────────────────
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [editingSchedule, setEditingSchedule] = useState(false);
+  const [dailySchedule, setDailySchedule] = useState('18:00');
+  const [tempSchedule, setTempSchedule] = useState('18:00');
+  const [scheduleLoading, setScheduleLoading] = useState(false);
+  const [scheduleSaving, setScheduleSaving] = useState(false);
+
+  const handleOpenSettings = async () => {
+    setEditingSchedule(false);
+    setSettingsOpen(true);
+    // Cargar horario actual desde la BD
+    setScheduleLoading(true);
+    try {
+      const { data } = await apiClient.get('/config/schedule');
+      if (data.success && data.dailyUpdateSchedule) {
+        setDailySchedule(data.dailyUpdateSchedule);
+        setTempSchedule(data.dailyUpdateSchedule);
+      }
+    } catch (err) {
+      // Mantener valor por defecto si falla
+    } finally {
+      setScheduleLoading(false);
+    }
+  };
+
+  const handleEditSchedule = () => {
+    setTempSchedule(dailySchedule);
+    setEditingSchedule(true);
+  };
+  const handleCancelSchedule = () => {
+    setTempSchedule(dailySchedule);
+    setEditingSchedule(false);
+  };
+  const handleConfirmSchedule = async () => {
+    setScheduleSaving(true);
+    try {
+      const { data } = await apiClient.put('/config/schedule', { dailyUpdateSchedule: tempSchedule });
+      if (data.success) {
+        setDailySchedule(data.dailyUpdateSchedule);
+      }
+    } catch (err) {
+      // Silently keep old value on error — backend validation will have fired
+    } finally {
+      setScheduleSaving(false);
+      setEditingSchedule(false);
+    }
+  };
+
+  // ── Estado para expandir items de cada tarjeta ───────────────────────────
+  const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
+  const ITEMS_VISIBLE = 4;
+
+  // ── Filtros ──────────────────────────────────────────────────────────────
+  const [searchText, setSearchText] = useState('');
+  const [debouncedSearchText, setDebouncedSearchText] = useState('');
+  const [filterDateFrom, setFilterDateFrom] = useState('');
+  const [filterDateTo, setFilterDateTo] = useState('');
+
+  const toggleItemsExpanded = (purchaseId: string) => {
+    setExpandedItems(prev => {
+      const next = new Set(prev);
+      if (next.has(purchaseId)) next.delete(purchaseId);
+      else next.add(purchaseId);
+      return next;
+    });
+  };
+
+  // ── Estados para eliminación de compra ────────────────────────────────────
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deletingPurchaseId, setDeletingPurchaseId] = useState<string | null>(null);
+  const [deletingPurchase, setDeletingPurchase] = useState<PurchaseRecord | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   const ITEMS_PER_PAGE = 20;
+
+  // Mapa SKU → nombre de proveedor para lookup rápido en las tarjetas
+  const supplierNameBySku = useMemo(() => {
+    const map = new Map<string, string>();
+    suppliers.forEach(s => { if (s.sku) map.set(s.sku, s.name); });
+    return map;
+  }, [suppliers]);
 
   // Cargar todos los datos una vez al inicio (sin filtros)
   useEffect(() => {
     const loadAllData = async () => {
       setInitialLoad(true);
-      await fetchManualLogs({}); // Cargar sin filtros
+      await Promise.all([fetchManualLogs({}), suppliers.length === 0 ? fetchSuppliers() : Promise.resolve()]);
       setInitialLoad(false);
     };
     void loadAllData();
     setCurrentPage(1);
-  }, [fetchManualLogs]);
+  }, [fetchManualLogs, fetchSuppliers]);
 
-  // Guardar todos los datos cuando se cargan inicialmente
   useEffect(() => {
-    if (purchasesLog.length > 0 && (allPurchasesData.length === 0 || purchasesLog.length > allPurchasesData.length)) {
-      setAllPurchasesData(purchasesLog);
-    }
+    // Siempre sincronizar allPurchasesData con purchasesLog cuando este cambie
+    setAllPurchasesData(purchasesLog);
   }, [purchasesLog]);
 
-  // Filtrar los datos localmente según las fechas
+  // Debounce para el texto de búsqueda (300 ms)
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearchText(searchText), 300);
+    return () => clearTimeout(timer);
+  }, [searchText]);
+
+  // Resetear a página 1 cuando cambian los filtros
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [debouncedSearchText, filterDateFrom, filterDateTo]);
+
   const filteredPurchases = useMemo(() => {
-    if (allPurchasesData.length === 0) return [];
+    let data = allPurchasesData;
 
-    let filtered = [...allPurchasesData];
-
-    if (dateFrom) {
-      const fromDate = new Date(dateFrom);
-      fromDate.setHours(0, 0, 0, 0);
-      filtered = filtered.filter(purchase => {
-        const purchaseDate = new Date(purchase.timestamp);
-        return purchaseDate >= fromDate;
+    if (filterDateFrom) {
+      const from = new Date(filterDateFrom + 'T00:00:00');
+      data = data.filter(p => new Date(p.timestamp) >= from);
+    }
+    if (filterDateTo) {
+      const to = new Date(filterDateTo + 'T23:59:59');
+      data = data.filter(p => new Date(p.timestamp) <= to);
+    }
+    if (debouncedSearchText.trim()) {
+      const q = debouncedSearchText.toLowerCase().trim();
+      data = data.filter(p => {
+        const invoiceNum = (p.invoiceNumber ?? '').toLowerCase();
+        const supplierRaw = (p.supplier ?? '').toLowerCase();
+        const supplierName = (supplierNameBySku.get(p.supplier ?? '') ?? '').toLowerCase();
+        if (invoiceNum.includes(q) || supplierRaw.includes(q) || supplierName.includes(q)) return true;
+        return p.items.some(item => {
+          // Buscar en ingredientes
+          if (item.ingredient) {
+            const name = typeof item.ingredient === 'object' && item.ingredient !== null
+              ? ((item.ingredient as { name?: string }).name ?? '').toLowerCase()
+              : '';
+            if (name.includes(q)) return true;
+          }
+          // Buscar en bebidas
+          if (item.beverage) {
+            const name = typeof item.beverage === 'object' && item.beverage !== null
+              ? ((item.beverage as { name?: string }).name ?? '').toLowerCase()
+              : '';
+            if (name.includes(q)) return true;
+          }
+          return false;
+        });
       });
     }
+    return data;
+  }, [allPurchasesData, debouncedSearchText, filterDateFrom, filterDateTo, supplierNameBySku]);
 
-    if (dateTo) {
-      const toDate = new Date(dateTo);
-      toDate.setHours(23, 59, 59, 999);
-      filtered = filtered.filter(purchase => {
-        const purchaseDate = new Date(purchase.timestamp);
-        return purchaseDate <= toDate;
-      });
-    }
-
-    return filtered;
-  }, [allPurchasesData, dateFrom, dateTo]);
-
-  // Calcular items paginados (mostrar las últimas 20 primero)
   const paginatedPurchases = useMemo(() => {
     if (filteredPurchases.length === 0) return [];
-    // Los datos ya vienen ordenados por timestamp descendente (más recientes primero)
     const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-    const endIndex = startIndex + ITEMS_PER_PAGE;
-    return filteredPurchases.slice(startIndex, endIndex);
+    return filteredPurchases.slice(startIndex, startIndex + ITEMS_PER_PAGE);
   }, [filteredPurchases, currentPage]);
 
-  const totalPages = useMemo(() => {
-    return Math.ceil(filteredPurchases.length / ITEMS_PER_PAGE);
-  }, [filteredPurchases.length]);
+  const totalPages = useMemo(
+    () => Math.ceil(filteredPurchases.length / ITEMS_PER_PAGE),
+    [filteredPurchases.length]
+  );
 
   const handlePreviousPage = () => {
     if (currentPage > 1) {
@@ -140,632 +379,686 @@ const PurchasesPage = () => {
     }
   };
 
-  const handleDateFromChange = (event: ChangeEvent<HTMLInputElement>) => {
-    setDateFrom(event.target.value);
-  };
-
-  const handleDateToChange = (event: ChangeEvent<HTMLInputElement>) => {
-    setDateTo(event.target.value);
-  };
-
-  const handleFilter = () => {
-    const newFilters = {
-      from: dateFrom || undefined,
-      to: dateTo || undefined
-    };
-    setManualFilters(newFilters);
-    setCurrentPage(1); // Resetear a la primera página al filtrar
-  };
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleString('es-ES', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit'
+  const formatDate = (dateString: string) =>
+    new Date(dateString).toLocaleString('es-ES', {
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit'
     });
+
+  // ── Cargar PDF: abre el selector de archivos ─────────────────────────────
+
+  const handleCargarPdfClick = () => {
+    setPdfFileError(null);
+    // Limpiar valor anterior para permitir re-seleccionar el mismo archivo
+    if (pdfInputRef.current) pdfInputRef.current.value = '';
+    pdfInputRef.current?.click();
   };
 
-  const handleFileSelect = async (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
+  const handlePdfFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0] ?? null;
     if (!file) return;
 
-    // Validar tipo de archivo
-    if (!file.type.includes('json') && !file.name.endsWith('.json')) {
-      alert('Por favor, selecciona un archivo JSON válido');
+    // Validar formato
+    if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
+      setPdfFileError('Solo se permiten archivos PDF.');
+      setSelectedPdf(null);
       return;
     }
 
-    // Validar tamaño (2MB)
-    const maxSize = 2 * 1024 * 1024; // 2MB
-    if (file.size > maxSize) {
-      alert(`El archivo es demasiado grande (${(file.size / 1024 / 1024).toFixed(2)} MB). Máximo permitido: 2 MB`);
+    // Validar tamaño (máx 2 MB)
+    const MAX_SIZE_BYTES = 2 * 1024 * 1024;
+    if (file.size > MAX_SIZE_BYTES) {
+      setPdfFileError(`El archivo supera el tamaño máximo de 2 MB (${(file.size / 1024 / 1024).toFixed(1)} MB).`);
+      setSelectedPdf(null);
       return;
     }
 
-    setUploading(true);
+    setPdfFileError(null);
+    setSelectedPdf(file);
+    setUpdateMode('pdf');
+    setUpdateConfirmOpen(true);
+  };
 
+  // ── Actualización de stock (desde bucket o desde PDF cargado) ─────────────
+
+  const handleUpdateStockConfirm = async () => {
+    setUpdateConfirmOpen(false);
+    setUpdateLoading(true);
     try {
-      // Leer archivo como texto
-      const fileContent = await file.text();
-      const invoiceData = JSON.parse(fileContent);
+      let data: UpdateStockResult;
 
-      // Validar estructura básica
-      if (!invoiceData.lista_items || !Array.isArray(invoiceData.lista_items)) {
-        alert('El archivo JSON no tiene la estructura correcta. Debe contener lista_items como array.');
-        setUploading(false);
-        return;
-      }
+      if (updateMode === 'pdf' && selectedPdf) {
+        // Leer el PDF como base64
+        const pdfBase64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => {
+            const result = reader.result as string;
+            // Eliminar el prefijo "data:application/pdf;base64,"
+            resolve(result.split(',')[1]);
+          };
+          reader.onerror = () => reject(new Error('No se pudo leer el archivo PDF'));
+          reader.readAsDataURL(selectedPdf);
+        });
 
-      // Subir archivo
-      const uploadResponse = await apiClient.post('/invoices/upload', invoiceData);
-
-      if (uploadResponse.data.success) {
-        const invoiceId = uploadResponse.data.invoiceId;
-        setCurrentInvoiceId(invoiceId);
-
-        // Generar preview
-        const previewResponse = await apiClient.post(`/invoices/preview/${invoiceId}`);
-
-        if (previewResponse.data.success) {
-          setPreviewData(previewResponse.data);
-          setPreviewOpen(true);
-        } else {
-          alert('Error generando preview: ' + previewResponse.data.message);
-        }
+        const response = await apiClient.post<UpdateStockResult>('/suppliers/upload-pdf-stock', {
+          pdfBase64,
+          fileName: selectedPdf.name
+        });
+        data = response.data;
       } else {
-        alert('Error subiendo archivo: ' + uploadResponse.data.message);
+        // Modo bucket (botón Actualizar)
+        const response = await apiClient.post<UpdateStockResult>('/suppliers/update-stock');
+        data = response.data;
       }
 
-    } catch (error: any) {
-      console.error('Error procesando archivo:', error);
-      const errorMessage = error.response?.data?.message || error.message || 'Error procesando archivo';
-      alert(errorMessage);
-    } finally {
-      setUploading(false);
-      // Limpiar input
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
+      setUpdateResult(data);
+      // Refrescar snapshot (inventario/dashboard) y lista de compras en paralelo
+      if (data.success && !data.noNewInvoices) {
+        void Promise.all([fetchSnapshot(), fetchManualLogs({})]);
       }
+    } catch (err: unknown) {
+      // Extraer la respuesta de error de Axios si está disponible
+      const axiosData =
+        err && typeof err === 'object' && 'response' in err
+          ? (err as { response: { data?: UpdateStockResult } }).response?.data
+          : undefined;
+
+      if (axiosData) {
+        setUpdateResult(axiosData);
+      } else {
+        const message =
+          err instanceof Error ? err.message : 'Error desconocido al actualizar el stock';
+        setUpdateResult({ success: false, message });
+      }
+    } finally {
+      setUpdateLoading(false);
+      setUpdateResultOpen(true);
+      setSelectedPdf(null);
     }
   };
 
-  const handleConfirmInvoice = async () => {
-    if (!currentInvoiceId) return;
+  // ── Eliminación de compra ─────────────────────────────────────────────────
 
-    setConfirming(true);
+  const handleDeleteClick = (purchase: PurchaseRecord) => {
+    setDeletingPurchaseId(purchase._id);
+    setDeletingPurchase(purchase);
+    setDeleteConfirmOpen(true);
+  };
 
+  const handleDeleteConfirm = async () => {
+    if (!deletingPurchaseId) return;
+    setDeleteConfirmOpen(false);
+    setDeleteLoading(true);
     try {
-      const response = await apiClient.post(`/invoices/confirm/${currentInvoiceId}`);
-
-      if (response.data.success) {
-        alert('Factura procesada y aplicada exitosamente');
-        setPreviewOpen(false);
-        setPreviewData(null);
-        setCurrentInvoiceId(null);
-
-        // Recargar datos
-        await fetchManualLogs({});
-        await fetchSnapshot();
-      } else {
-        alert('Error confirmando factura: ' + response.data.message);
-      }
-    } catch (error: any) {
-      console.error('Error confirmando factura:', error);
-      const errorMessage = error.response?.data?.message || error.message || 'Error confirmando factura';
-      alert(errorMessage);
+      await apiClient.delete(`/manual/purchases/${deletingPurchaseId}`);
+      // Actualizar la lista local eliminando el registro
+      setAllPurchasesData(prev => prev.filter(p => p._id !== deletingPurchaseId));
+      // Refrescar snapshot de stock
+      await fetchSnapshot();
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error ? err.message : 'Error desconocido al eliminar la compra';
+      alert(`Error al eliminar la compra: ${message}`);
     } finally {
-      setConfirming(false);
+      setDeleteLoading(false);
+      setDeletingPurchaseId(null);
+      setDeletingPurchase(null);
     }
   };
 
-  const handleCancelPreview = () => {
-    setPreviewOpen(false);
-    setPreviewData(null);
-    setCurrentInvoiceId(null);
+  const handleDeleteCancel = () => {
+    setDeleteConfirmOpen(false);
+    setDeletingPurchaseId(null);
+    setDeletingPurchase(null);
   };
 
-  const handleUpdatePdfs = async () => {
-    setProcessingPdfs(true);
-    setPdfPreviewOpen(true);
-    setPdfPreviewData(null);
-    setPdfInvoiceIds([]);
-
-    try {
-      const response = await apiClient.post('/invoices/process-pdfs');
-
-      if (response.data.success) {
-        const invoices = response.data.invoices || [];
-
-        if (invoices.length === 0) {
-          alert('No hay facturas nuevas para procesar');
-          setPdfPreviewOpen(false);
-          setProcessingPdfs(false);
-          return;
-        }
-
-        // Recopilar todos los IDs de facturas procesadas
-        const allInvoiceIds = invoices
-          .filter((inv: any) => inv.invoiceId)
-          .map((inv: any) => inv.invoiceId);
-        setPdfInvoiceIds(allInvoiceIds);
-
-        // Si hay múltiples facturas, mostrar la primera (o todas en una lista)
-        // Por ahora, mostramos la primera factura procesada con preview
-        const firstInvoice = invoices.find((inv: any) => inv.preview) || invoices[0];
-
-        if (firstInvoice && firstInvoice.preview) {
-          setPdfPreviewData({
-            summary: firstInvoice.preview.summary,
-            nuevosIngredientes: firstInvoice.preview.nuevosIngredientes || [],
-            ingredientesActualizados: firstInvoice.preview.ingredientesActualizados || [],
-            errors: firstInvoice.preview.errors || [],
-            fileName: firstInvoice.fileName,
-            invoiceData: firstInvoice.invoiceData,
-            totalInvoices: invoices.length
-          });
-        } else {
-          alert('Error: No se pudo generar el preview de las facturas procesadas');
-          setPdfPreviewOpen(false);
-        }
-      } else {
-        alert('Error procesando facturas PDF: ' + (response.data.message || 'Error desconocido'));
-        setPdfPreviewOpen(false);
-      }
-    } catch (error: any) {
-      console.error('Error procesando facturas PDF:', error);
-      const errorMessage = error.response?.data?.message || error.message || 'Error procesando facturas PDF';
-      alert(errorMessage);
-      setPdfPreviewOpen(false);
-    } finally {
-      setProcessingPdfs(false);
-    }
-  };
-
-  const handleCancelPdfPreview = async () => {
-    // Cancelar todas las facturas procesadas
-    if (pdfInvoiceIds.length > 0) {
-      try {
-        for (const invoiceId of pdfInvoiceIds) {
-          await apiClient.delete(`/invoices/cancel-pdf/${invoiceId}`);
-        }
-      } catch (error: any) {
-        console.error('Error cancelando facturas:', error);
-        // Continuar con el cierre del diálogo aunque haya error
-      }
-    }
-
-    setPdfPreviewOpen(false);
-    setPdfPreviewData(null);
-    setPdfInvoiceIds([]);
-  };
-
-  const handleAcceptPdfPreview = () => {
-    // Por ahora, solo mostrar un mensaje
-    alert('Funcionalidad de aceptar aún no implementada');
-    // TODO: Implementar funcionalidad de aceptar
-  };
+  // ─────────────────────────────────────────────────────────────────────────
+  // Render
+  // ─────────────────────────────────────────────────────────────────────────
 
   return (
     <Grid container spacing={3} sx={{ py: 0 }}>
+      {/* Header */}
       <Grid item xs={12}>
         <Stack direction="row" justifyContent="space-between" alignItems="center">
           <Typography variant="h4">Compras</Typography>
-          <Stack direction="row" spacing={2}>
-            <Button
-              variant="contained"
-              onClick={handleFilter}
+          {canUpdateStock && (
+            <IconButton
+              onClick={handleOpenSettings}
+              title="Configuraciones"
+              aria-label="Abrir configuraciones"
+              sx={{ color: 'text.secondary' }}
             >
-              Filtrar
-            </Button>
-            <Button
-              variant="contained"
-              sx={{
-                backgroundColor: '#424242',
-                '&:hover': {
-                  backgroundColor: '#616161'
-                }
-              }}
-              onClick={handleUpdatePdfs}
-              //disabled={processingPdfs}
-              disabled={true}
-              startIcon={processingPdfs ? <CircularProgress size={20} /> : null}
-            >
-              {processingPdfs ? 'Procesando...' : 'Actualizar'}
-            </Button>
-          </Stack>
-        </Stack>
-      </Grid>
-      <Grid item xs={12}>
-        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-          <TextField
-            label="Fecha desde"
-            type="date"
-            value={dateFrom}
-            onChange={handleDateFromChange}
-            InputLabelProps={{
-              shrink: true
-            }}
-            sx={{ flexGrow: 1 }}
-          />
-          <TextField
-            label="Fecha hasta"
-            type="date"
-            value={dateTo}
-            onChange={handleDateToChange}
-            InputLabelProps={{
-              shrink: true
-            }}
-            sx={{ flexGrow: 1 }}
-          />
+              <SettingsIcon />
+            </IconButton>
+          )}
         </Stack>
       </Grid>
 
+      {/* Input PDF oculto */}
+      <input
+        ref={pdfInputRef}
+        type="file"
+        accept="application/pdf,.pdf"
+        style={{ display: 'none' }}
+        onChange={handlePdfFileSelect}
+      />
+
+      {/* Botones de acción */}
       <Grid item xs={12}>
-        <Stack
-          direction="row"
-          spacing={2}
-          sx={{ width: '100%' }}
-        >
-          <input
-            type="file"
-            accept=".json,application/json"
-            ref={fileInputRef}
-            onChange={handleFileSelect}
-            style={{ display: 'none' }}
-          />
+        <Stack direction="row" spacing={2} sx={{ width: '100%' }}>
           <Button
             variant="contained"
             fullWidth
-            onClick={() => fileInputRef.current?.click()}
-            //disabled={uploading}
-            disabled={true}
-            startIcon={uploading ? <CircularProgress size={20} /> : <UploadFileIcon />}
-            sx={{ flex: 1 }}
-            style={{ marginLeft: '0' }}
-          >
-            {uploading ? 'Procesando...' : 'Factura JSON'}
-          </Button>
-          <Button
-            variant="contained"
-            fullWidth
-            onClick={() => {
-              // TODO: Implementar funcionalidad de sincronizar
-            }}
+            onClick={handleCargarPdfClick}
             startIcon={<PictureAsPdfIcon />}
             sx={{ flex: 1 }}
-            disabled={true}
           >
-            Factura PDF
+            Cargar PDF
           </Button>
+          {canUpdateStock && (
+            <Button
+              variant="contained"
+              fullWidth
+              sx={{ flex: 1, backgroundColor: '#424242', '&:hover': { backgroundColor: '#616161' } }}
+              onClick={() => { setUpdateMode('bucket'); setUpdateConfirmOpen(true); }}
+              startIcon={<SyncIcon />}
+            >
+              Actualizar
+            </Button>
+          )}
         </Stack>
+        {pdfFileError && (
+          <Alert severity="error" sx={{ mt: 1 }} onClose={() => setPdfFileError(null)}>
+            {pdfFileError}
+          </Alert>
+        )}
       </Grid>
 
-      {/* Diálogo de Preview para PDFs */}
+      {/* ── Diálogo de Configuraciones ────────────────────────────────────── */}
       <Dialog
-        open={pdfPreviewOpen}
-        onClose={handleCancelPdfPreview}
-        maxWidth="md"
+        open={settingsOpen}
+        onClose={() => { setSettingsOpen(false); setEditingSchedule(false); }}
+        maxWidth="xs"
         fullWidth
       >
         <DialogTitle>
-          <Stack direction="row" justifyContent="space-between" alignItems="center">
-            <Typography variant="h6">
-              {processingPdfs ? 'Procesando Facturas PDF...' : 'Vista Previa de Factura PDF'}
-            </Typography>
-            {pdfPreviewData?.summary && (
-              <Chip
-                label={`${pdfPreviewData.summary.totalItems} items`}
-                color="primary"
-                size="small"
-              />
-            )}
+          <Stack direction="row" alignItems="center" gap={1}>
+            <SettingsIcon fontSize="small" />
+            Configuraciones
           </Stack>
         </DialogTitle>
-        <DialogContent>
-          {processingPdfs ? (
-            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', py: 4 }}>
-              <Stack spacing={2} alignItems="center">
-                <CircularProgress />
-                <Typography variant="body2" color="text.secondary">
-                  Procesando facturas PDF con Gemini. No cierre esta ventana.
-                </Typography>
-              </Stack>
+        <DialogContent dividers>
+          {scheduleLoading ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
+              <CircularProgress size={28} />
             </Box>
-          ) : pdfPreviewData ? (
-            <Stack spacing={3}>
-              {/* Resumen */}
+          ) : (
+            <Stack spacing={2}>
+              {/* Configuración: Horario de actualización diaria */}
               <Box>
-                <Typography variant="subtitle1" fontWeight={600} gutterBottom>
-                  Resumen
-                </Typography>
-                <Stack spacing={1}>
-                  {pdfPreviewData.summary && (
-                    <>
-                      <Typography variant="body2">
-                        <strong>Total items:</strong> {pdfPreviewData.summary.totalItems}
+                <Stack direction="row" justifyContent="space-between" alignItems="center">
+                  <Typography variant="body2" fontWeight={500}>
+                    Horario de actualización diaria
+                  </Typography>
+                  {!editingSchedule && (
+                    <Stack direction="row" alignItems="center" spacing={0.5}>
+                      <Typography variant="body2" color="text.secondary">
+                        {dailySchedule}hs
                       </Typography>
-                      <Typography variant="body2">
-                        <strong>Nuevos ingredientes:</strong> {pdfPreviewData.summary.nuevosIngredientes}
-                      </Typography>
-                      <Typography variant="body2">
-                        <strong>Ingredientes actualizados:</strong> {pdfPreviewData.summary.ingredientesActualizados}
-                      </Typography>
-                      {pdfPreviewData.summary.errores > 0 && (
-                        <Typography variant="body2" color="error">
-                          <strong>Errores:</strong> {pdfPreviewData.summary.errores}
-                        </Typography>
-                      )}
-                    </>
-                  )}
-                  {pdfPreviewData.fileName && (
-                    <Typography variant="body2" color="text.secondary">
-                      <strong>Archivo:</strong> {pdfPreviewData.fileName}
-                    </Typography>
-                  )}
-                  {pdfPreviewData.totalInvoices && pdfPreviewData.totalInvoices > 1 && (
-                    <Typography variant="body2" color="text.secondary">
-                      <strong>Total facturas procesadas:</strong> {pdfPreviewData.totalInvoices}
-                    </Typography>
+                      <IconButton
+                        size="small"
+                        onClick={handleEditSchedule}
+                        title="Modificar horario"
+                        aria-label="Modificar horario"
+                      >
+                        <EditOutlinedIcon fontSize="small" />
+                      </IconButton>
+                    </Stack>
                   )}
                 </Stack>
+                {editingSchedule && (
+                  <Stack spacing={1.5} sx={{ mt: 1.5 }}>
+                    <TextField
+                      type="time"
+                      value={tempSchedule}
+                      onChange={(e) => setTempSchedule(e.target.value)}
+                      size="small"
+                      fullWidth
+                      inputProps={{ step: 300 }}
+                      disabled={scheduleSaving}
+                    />
+                    <Stack direction="row" spacing={1} justifyContent="flex-end">
+                      <Button size="small" onClick={handleCancelSchedule} disabled={scheduleSaving}>
+                        Cancelar
+                      </Button>
+                      <Button
+                        size="small"
+                        variant="contained"
+                        onClick={handleConfirmSchedule}
+                        disabled={!tempSchedule || scheduleSaving}
+                        startIcon={scheduleSaving ? <CircularProgress size={14} color="inherit" /> : null}
+                      >
+                        {scheduleSaving ? 'Guardando…' : 'Confirmar'}
+                      </Button>
+                    </Stack>
+                  </Stack>
+                )}
               </Box>
-
-              <Divider />
-
-              {/* Nuevos Ingredientes */}
-              {pdfPreviewData.nuevosIngredientes && pdfPreviewData.nuevosIngredientes.length > 0 && (
-                <Box>
-                  <Typography variant="subtitle1" fontWeight={600} gutterBottom>
-                    Nuevos Ingredientes ({pdfPreviewData.nuevosIngredientes.length})
-                  </Typography>
-                  <List dense>
-                    {pdfPreviewData.nuevosIngredientes.map((item: any, index: number) => (
-                      <ListItem key={index}>
-                        <ListItemText
-                          primary={item.nombre}
-                          secondary={
-                            <Stack direction="row" spacing={1} sx={{ mt: 0.5 }}>
-                              <Chip label={`SKU: ${item.sku}`} size="small" variant="outlined" />
-                              <Chip label={`${item.cantidad}g`} size="small" variant="outlined" />
-                              {item.unidad_interpretada && (
-                                <Chip label={item.unidad_interpretada} size="small" variant="outlined" />
-                              )}
-                            </Stack>
-                          }
-                        />
-                      </ListItem>
-                    ))}
-                  </List>
-                </Box>
-              )}
-
-              {/* Ingredientes Actualizados */}
-              {pdfPreviewData.ingredientesActualizados && pdfPreviewData.ingredientesActualizados.length > 0 && (
-                <Box>
-                  <Typography variant="subtitle1" fontWeight={600} gutterBottom>
-                    Ingredientes Actualizados ({pdfPreviewData.ingredientesActualizados.length})
-                  </Typography>
-                  <List dense>
-                    {pdfPreviewData.ingredientesActualizados.map((item: any, index: number) => (
-                      <ListItem key={index}>
-                        <ListItemText
-                          primary={item.nombre}
-                          secondary={
-                            <Stack direction="row" spacing={1} sx={{ mt: 0.5 }}>
-                              <Chip
-                                label={`Stock anterior: ${item.cantidadAnterior}g`}
-                                size="small"
-                                variant="outlined"
-                              />
-                              <Chip
-                                label={`+${item.cantidadAgregada}g`}
-                                size="small"
-                                color="success"
-                              />
-                              {item.unidad_interpretada && (
-                                <Chip label={item.unidad_interpretada} size="small" variant="outlined" />
-                              )}
-                            </Stack>
-                          }
-                        />
-                      </ListItem>
-                    ))}
-                  </List>
-                </Box>
-              )}
-
-              {/* Errores */}
-              {pdfPreviewData.errors && pdfPreviewData.errors.length > 0 && (
-                <Box>
-                  <Typography variant="subtitle1" fontWeight={600} gutterBottom color="error">
-                    Errores ({pdfPreviewData.errors.length})
-                  </Typography>
-                  <List dense>
-                    {pdfPreviewData.errors.map((error: any, index: number) => (
-                      <ListItem key={index}>
-                        <ListItemText
-                          primary={error.descripcion || error.codigo}
-                          secondary={error.error}
-                          primaryTypographyProps={{ color: 'error' }}
-                        />
-                      </ListItem>
-                    ))}
-                  </List>
-                </Box>
-              )}
             </Stack>
-          ) : (
-            <CircularProgress />
           )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleCancelPdfPreview} disabled={processingPdfs}>
-            Cancelar
+          <Button onClick={() => { setSettingsOpen(false); setEditingSchedule(false); }} disabled={scheduleSaving}>
+            Cerrar
           </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* ── Diálogo confirmación actualización de stock (bucket o PDF cargado) ─ */}
+      <Dialog
+        open={updateConfirmOpen}
+        onClose={() => { setUpdateConfirmOpen(false); setSelectedPdf(null); }}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>
+          <Stack direction="row" alignItems="center" gap={1}>
+            {updateMode === 'pdf' ? <PictureAsPdfIcon color="primary" /> : <SyncIcon color="primary" />}
+            {updateMode === 'pdf'
+              ? 'Procesar factura PDF cargada'
+              : 'Actualizar stock desde facturas'}
+          </Stack>
+        </DialogTitle>
+        <DialogContent>
+          <Stack spacing={2}>
+            {updateMode === 'pdf' && selectedPdf && (
+              <Alert severity="info" icon={<PictureAsPdfIcon />}>
+                <strong>Archivo seleccionado:</strong> {selectedPdf.name}{' '}
+                <Typography component="span" variant="caption" color="text.secondary">
+                  ({(selectedPdf.size / 1024).toFixed(0)} KB)
+                </Typography>
+              </Alert>
+            )}
+            <Typography>
+              Se realizará el siguiente proceso de forma <strong>automática e irreversible</strong>:
+            </Typography>
+            <Box component="ol" sx={{ pl: 2.5, m: 0, '& li': { mb: 0.75 } }}>
+              <li>
+                <Typography variant="body2">
+                  {updateMode === 'pdf' ? (
+                    <><strong>Procesamiento del PDF cargado</strong> mediante IA (Gemini) para extraer los datos de la factura.</>
+                  ) : (
+                    <><strong>Búsqueda de facturas nuevas</strong> en el bucket de Google Cloud Storage. Cada PDF nuevo será procesado con IA (Gemini) para extraer sus datos.</>
+                  )}
+                </Typography>
+              </li>
+              <li>
+                <Typography variant="body2">
+                  <strong>Unificación de items</strong> de la{updateMode === 'pdf' ? '' : 's'} factura{updateMode === 'pdf' ? '' : 's'}, agrupando por código de artículo.
+                </Typography>
+              </li>
+              <li>
+                <Typography variant="body2">
+                  <strong>Actualización de stock</strong> en ingredientes y bebidas mediante el código de artículo (<em>codeArticlePurchase</em>). Los items sin coincidencia se mostrarán al finalizar para agregarlos manualmente.
+                </Typography>
+              </li>
+            </Box>
+            <Alert severity="warning" icon={<WarningAmberIcon />}>
+              Este proceso puede tardar varios minutos. No cierres la aplicación hasta que finalice.
+            </Alert>
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => { setUpdateConfirmOpen(false); setSelectedPdf(null); }}>Cancelar</Button>
           <Button
-            onClick={handleAcceptPdfPreview}
             variant="contained"
-            disabled={processingPdfs || !pdfPreviewData}
+            startIcon={updateMode === 'pdf' ? <PictureAsPdfIcon /> : <SyncIcon />}
+            onClick={handleUpdateStockConfirm}
           >
             Aceptar
           </Button>
         </DialogActions>
       </Dialog>
 
-      {/* Diálogo de Preview */}
+      {/* ── Loading overlay (no se puede cerrar) ──────────────────────────── */}
       <Dialog
-        open={previewOpen}
-        onClose={handleCancelPreview}
+        open={updateLoading}
+        maxWidth="sm"
+        fullWidth
+        disableEscapeKeyDown
+        onClose={() => { /* bloqueado intencionalmente */ }}
+      >
+        <DialogTitle>Actualizando stock…</DialogTitle>
+        <DialogContent>
+          <Stack spacing={3} alignItems="center" sx={{ py: 3 }}>
+            <CircularProgress size={64} />
+            <Typography variant="body1" textAlign="center">
+              El proceso está en ejecución. Esto puede tomar varios minutos.
+              <br />
+              <strong>Por favor, no cierres ni recargues la página.</strong>
+            </Typography>
+            <Box sx={{ width: '100%' }}>
+              <LinearProgress />
+            </Box>
+            <Stack spacing={0.5} sx={{ width: '100%' }}>
+              <Typography variant="caption" color="text.secondary">
+                ① {updateMode === 'pdf' ? 'Procesando el PDF cargado con IA (Gemini)…' : 'Procesando PDFs del bucket con IA (Gemini)…'}
+              </Typography>
+              <Typography variant="caption" color="text.secondary">② Unificando items de facturas…</Typography>
+              <Typography variant="caption" color="text.secondary">③ Registrando compras en el historial…</Typography>
+              <Typography variant="caption" color="text.secondary">④ Actualizando stock en ingredientes y bebidas…</Typography>
+            </Stack>
+          </Stack>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Diálogo resultado actualización ────────────────────────────────── */}
+      <Dialog
+        open={updateResultOpen}
+        onClose={() => setUpdateResultOpen(false)}
         maxWidth="md"
         fullWidth
+        scroll="paper"
       >
         <DialogTitle>
-          <Stack direction="row" justifyContent="space-between" alignItems="center">
-            <Typography variant="h6">Vista Previa de Factura</Typography>
-            {previewData?.summary && (
-              <Chip
-                label={`${previewData.summary.totalItems} items`}
-                color="primary"
-                size="small"
-              />
-            )}
+          <Stack direction="row" alignItems="center" gap={1}>
+            {updateResult?.success
+              ? <CheckCircleOutlineIcon color="success" />
+              : updateResult?.isDuplicateInvoice
+                ? <WarningAmberIcon color="warning" />
+                : <ErrorOutlineIcon color="error" />}
+            {updateResult?.success
+              ? 'Actualización completada'
+              : updateResult?.isDuplicateInvoice
+                ? 'Factura ya registrada'
+                : 'Error en la actualización'}
           </Stack>
         </DialogTitle>
-        <DialogContent>
-          {previewData ? (
+        <DialogContent dividers>
+          {updateResult && (
             <Stack spacing={3}>
-              {/* Resumen */}
-              <Box>
-                <Typography variant="subtitle1" fontWeight={600} gutterBottom>
-                  Resumen
-                </Typography>
-                <Stack spacing={1}>
-                  {previewData.summary && (
-                    <>
-                      <Typography variant="body2">
-                        <strong>Total items:</strong> {previewData.summary.totalItems}
-                      </Typography>
-                      <Typography variant="body2">
-                        <strong>Nuevos ingredientes:</strong> {previewData.summary.nuevosIngredientes}
-                      </Typography>
-                      <Typography variant="body2">
-                        <strong>Ingredientes actualizados:</strong> {previewData.summary.ingredientesActualizados}
-                      </Typography>
-                      {previewData.summary.errores > 0 && (
-                        <Typography variant="body2" color="error">
-                          <strong>Errores:</strong> {previewData.summary.errores}
-                        </Typography>
+
+              {/* Factura duplicada */}
+              {updateResult.isDuplicateInvoice && (
+                <Alert severity="warning" icon={<WarningAmberIcon />}>
+                  <strong>Factura ya registrada</strong>
+                  <br />
+                  {updateResult.message}
+                  <br />
+                  <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+                    Si necesitas corregir un error, elimina primero la compra existente y vuelve a subir el PDF.
+                  </Typography>
+                </Alert>
+              )}
+
+              {/* Sin facturas nuevas */}
+              {!updateResult.isDuplicateInvoice && updateResult.noNewInvoices && (
+                <Alert severity="info">
+                  {updateResult.message ?? 'No se encontraron facturas nuevas en el bucket.'}
+                </Alert>
+              )}
+
+              {/* Error general */}
+              {!updateResult.isDuplicateInvoice && !updateResult.success && !updateResult.noNewInvoices && (
+                <Alert severity="error">
+                  {updateResult.message ?? 'Ha ocurrido un error desconocido.'}
+                </Alert>
+              )}
+
+              {/* Pasos ejecutados */}
+              {(updateResult.steps ?? []).length > 0 && (
+                <Box>
+                  <Typography variant="subtitle1" fontWeight={600} gutterBottom>Pasos del proceso</Typography>
+                  <Stack spacing={1}>
+                    {updateResult.steps!.map((step) => (
+                      <Stack key={step.step} direction="row" alignItems="flex-start" gap={1}>
+                        {step.success
+                          ? <CheckCircleOutlineIcon color="success" fontSize="small" sx={{ mt: 0.2 }} />
+                          : <ErrorOutlineIcon color="error" fontSize="small" sx={{ mt: 0.2 }} />}
+                        <Box>
+                          <Typography variant="body2" fontWeight={500}>{step.step}. {step.name}</Typography>
+                          {step.details && (
+                            <Typography variant="caption" color="text.secondary">
+                              {Object.entries(step.details).map(([k, v]) => `${k}: ${v}`).join(' · ')}
+                            </Typography>
+                          )}
+                          {step.error && (
+                            <Typography variant="caption" color="error.main">Error: {step.error}</Typography>
+                          )}
+                        </Box>
+                      </Stack>
+                    ))}
+                  </Stack>
+                </Box>
+              )}
+
+              {/* Resumen con chips */}
+              {updateResult.summary && !updateResult.noNewInvoices && (
+                <>
+                  <Divider />
+                  <Box>
+                    <Typography variant="subtitle1" fontWeight={600} gutterBottom>Resumen</Typography>
+                    <Stack direction="row" flexWrap="wrap" gap={1}>
+                      <Chip label={`${updateResult.summary.facturasNuevas ?? 0} facturas nuevas`} size="small" color="primary" variant="outlined" />
+                      <Chip label={`${updateResult.summary.purchasesCreados ?? 0} compras registradas`} size="small" color="info" variant="outlined" />
+                      <Chip label={`${updateResult.summary.itemsUnificados ?? 0} items unificados`} size="small" variant="outlined" />
+                      <Chip label={`${updateResult.summary.ingredientesActualizados ?? 0} ingredientes actualizados`} size="small" color="success" variant="outlined" />
+                      <Chip label={`${updateResult.summary.bebidasActualizadas ?? 0} bebidas actualizadas`} size="small" color="success" variant="outlined" />
+                      {(updateResult.summary.itemsSinMatch ?? 0) > 0 && (
+                        <Chip label={`${updateResult.summary.itemsSinMatch} sin match`} size="small" color="warning" variant="outlined" />
                       )}
-                    </>
-                  )}
-                </Stack>
-              </Box>
-
-              <Divider />
-
-              {/* Nuevos Ingredientes */}
-              {previewData.nuevosIngredientes && previewData.nuevosIngredientes.length > 0 && (
-                <Box>
-                  <Typography variant="subtitle1" fontWeight={600} gutterBottom>
-                    Nuevos Ingredientes ({previewData.nuevosIngredientes.length})
-                  </Typography>
-                  <List dense>
-                    {previewData.nuevosIngredientes.map((item: any, index: number) => (
-                      <ListItem key={index}>
-                        <ListItemText
-                          primary={item.nombre}
-                          secondary={
-                            <Stack direction="row" spacing={1} sx={{ mt: 0.5 }}>
-                              <Chip label={`SKU: ${item.sku}`} size="small" variant="outlined" />
-                              <Chip label={`${item.cantidad}g`} size="small" variant="outlined" />
-                              {item.unidad_interpretada && (
-                                <Chip label={item.unidad_interpretada} size="small" variant="outlined" />
-                              )}
-                            </Stack>
-                          }
-                        />
-                      </ListItem>
-                    ))}
-                  </List>
-                </Box>
+                    </Stack>
+                  </Box>
+                </>
               )}
 
-              {/* Ingredientes Actualizados */}
-              {previewData.ingredientesActualizados && previewData.ingredientesActualizados.length > 0 && (
-                <Box>
-                  <Typography variant="subtitle1" fontWeight={600} gutterBottom>
-                    Ingredientes Actualizados ({previewData.ingredientesActualizados.length})
-                  </Typography>
-                  <List dense>
-                    {previewData.ingredientesActualizados.map((item: any, index: number) => (
-                      <ListItem key={index}>
-                        <ListItemText
-                          primary={item.nombre}
-                          secondary={
-                            <Stack direction="row" spacing={1} sx={{ mt: 0.5 }}>
-                              <Chip
-                                label={`Stock anterior: ${item.cantidadAnterior}g`}
-                                size="small"
-                                variant="outlined"
-                              />
-                              <Chip
-                                label={`+${item.cantidadAgregada}g`}
-                                size="small"
-                                color="success"
-                              />
-                              {item.unidad_interpretada && (
-                                <Chip label={item.unidad_interpretada} size="small" variant="outlined" />
-                              )}
-                            </Stack>
-                          }
-                        />
-                      </ListItem>
-                    ))}
-                  </List>
-                </Box>
+              {/* Compras registradas */}
+              {(updateResult.createdPurchases ?? []).length > 0 && (
+                <>
+                  <Divider />
+                  <Box>
+                    <Typography variant="subtitle1" fontWeight={600} gutterBottom>
+                      Compras registradas en el historial
+                    </Typography>
+                    <Stack spacing={1}>
+                      {updateResult.createdPurchases!.map((p, idx) => (
+                        <Stack key={idx} direction="row" alignItems="center" gap={1} flexWrap="wrap">
+                          <CheckCircleOutlineIcon color="success" fontSize="small" />
+                          <Typography variant="body2">
+                            <strong>Factura {p.invoiceNumber ?? '—'}</strong>
+                            {p.supplier ? ` · ${p.supplier}` : ''}
+                          </Typography>
+                          <Chip
+                            label={(() => {
+                              const matched = p.ingredientItemsCount + (p.beverageItemsCount ?? 0);
+                              const parts: string[] = [];
+                              if (p.ingredientItemsCount > 0) parts.push(`${p.ingredientItemsCount} ing`);
+                              if ((p.beverageItemsCount ?? 0) > 0) parts.push(`${p.beverageItemsCount} beb`);
+                              return `${matched}/${p.totalItemsInInvoice} items${parts.length > 0 ? ` (${parts.join(' + ')})` : ''}`;
+                            })()}
+                            size="small"
+                            variant="outlined"
+                            color={(p.ingredientItemsCount + (p.beverageItemsCount ?? 0)) > 0 ? 'success' : 'default'}
+                          />
+                        </Stack>
+                      ))}
+                    </Stack>
+                  </Box>
+                </>
               )}
 
-              {/* Errores */}
-              {previewData.errors && previewData.errors.length > 0 && (
-                <Box>
-                  <Typography variant="subtitle1" fontWeight={600} gutterBottom color="error">
-                    Errores ({previewData.errors.length})
-                  </Typography>
-                  <List dense>
-                    {previewData.errors.map((error: any, index: number) => (
-                      <ListItem key={index}>
-                        <ListItemText
-                          primary={error.descripcion || error.codigo}
-                          secondary={error.error}
-                          primaryTypographyProps={{ color: 'error' }}
-                        />
-                      </ListItem>
-                    ))}
-                  </List>
-                </Box>
+              {/* Items sin match */}
+              {(updateResult.unmatchedItems ?? []).length > 0 && (
+                <>
+                  <Divider />
+                  <Box>
+                    <Stack direction="row" alignItems="center" gap={1} mb={1}>
+                      <WarningAmberIcon color="warning" fontSize="small" />
+                      <Typography variant="subtitle1" fontWeight={600}>
+                        Items sin coincidencia — deben agregarse manualmente
+                      </Typography>
+                    </Stack>
+                    <Alert severity="warning" sx={{ mb: 2 }}>
+                      Los siguientes artículos no pudieron asociarse a ningún ingrediente o bebida.
+                      Verifica que el campo <em>codeArticlePurchase</em> esté configurado o agrégalos
+                      manualmente.
+                    </Alert>
+                    <TableContainer>
+                      <Table size="small">
+                        <TableHead>
+                          <TableRow>
+                            <TableCell><strong>Código</strong></TableCell>
+                            <TableCell><strong>Descripción</strong></TableCell>
+                            <TableCell align="right"><strong>Cant. factura</strong></TableCell>
+                            <TableCell align="right"><strong>Gramos</strong></TableCell>
+                            <TableCell><strong>Motivo</strong></TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {updateResult.unmatchedItems!.map((item, idx) => (
+                            <TableRow key={idx}>
+                              <TableCell>
+                                <Typography fontFamily="monospace" variant="body2">{item.codigoArticulo}</Typography>
+                              </TableCell>
+                              <TableCell>{item.descripcionArticulo ?? '—'}</TableCell>
+                              <TableCell align="right">{item.cantidadFactura}</TableCell>
+                              <TableCell align="right">{item.cantidadTotalGramos}</TableCell>
+                              <TableCell>
+                                <Typography variant="caption" color="text.secondary">{item.razon}</Typography>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+                  </Box>
+                </>
               )}
+
+              {/* Todo ok sin items sin match */}
+              {updateResult.success && !updateResult.noNewInvoices && (updateResult.unmatchedItems ?? []).length === 0 && (
+                <Alert severity="success">
+                  ¡Todo correcto! El stock se ha actualizado para todos los artículos de las facturas
+                  nuevas. Ya puedes seguir usando la aplicación con normalidad.
+                </Alert>
+              )}
+
             </Stack>
-          ) : (
-            <CircularProgress />
           )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleCancelPreview} disabled={confirming}>
-            Cancelar
-          </Button>
-          <Button
-            onClick={handleConfirmInvoice}
-            variant="contained"
-            disabled={confirming || !previewData}
-            startIcon={confirming ? <CircularProgress size={20} /> : null}
-          >
-            {confirming ? 'Aplicando...' : 'Confirmar y Aplicar'}
+          <Button variant="contained" onClick={() => setUpdateResultOpen(false)}>
+            Entendido
           </Button>
         </DialogActions>
       </Dialog>
 
+      {/* ── Diálogo de confirmación eliminación de compra ─────────────────── */}
+      <Dialog open={deleteConfirmOpen} onClose={handleDeleteCancel} maxWidth="sm" fullWidth>
+        <DialogTitle>
+          <Stack direction="row" alignItems="center" gap={1}>
+            <DeleteOutlineIcon color="error" />
+            Revertir factura de compra
+          </Stack>
+        </DialogTitle>
+        <DialogContent>
+          <Stack spacing={2}>
+            {deletingPurchase && (
+              <Box sx={{ p: 1.5, bgcolor: 'grey.100', borderRadius: 1 }}>
+                {deletingPurchase.invoiceNumber && (
+                  <Typography variant="body2"><strong>Factura:</strong> {deletingPurchase.invoiceNumber}</Typography>
+                )}
+                {deletingPurchase.supplier && (
+                  <Typography variant="body2">
+                    <strong>Proveedor:</strong> {supplierNameBySku.get(deletingPurchase.supplier) ?? deletingPurchase.supplier}
+                  </Typography>
+                )}
+                <Typography variant="body2">
+                  <strong>Fecha:</strong> {formatDate(deletingPurchase.timestamp)}
+                </Typography>
+                <Typography variant="body2">
+                  <strong>Items:</strong> {deletingPurchase.items.length}
+                </Typography>
+              </Box>
+            )}
+            <Typography>
+              Se va a <strong>revertir por completo</strong> esta factura de compra. El proceso realizará
+              lo siguiente de forma automática:
+            </Typography>
+            <Box component="ul" sx={{ pl: 2.5, m: 0, '& li': { mb: 0.5 } }}>
+              <li>
+                <Typography variant="body2">Se restará del stock de cada ingrediente y bebida la cantidad que se sumó al registrar esta compra.</Typography>
+              </li>
+              <li>
+                <Typography variant="body2">Se eliminará el registro de la base de datos, permitiendo volver a subir esta factura en otro momento.</Typography>
+              </li>
+            </Box>
+            <Alert severity="error" icon={<WarningAmberIcon />}>
+              <strong>Esta acción es irreversible.</strong> Asegúrate de que deseas revertir esta carga de stock antes de continuar.
+            </Alert>
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleDeleteCancel} disabled={deleteLoading}>Cancelar</Button>
+          <Button
+            variant="contained"
+            color="error"
+            onClick={handleDeleteConfirm}
+            disabled={deleteLoading}
+            startIcon={deleteLoading ? <CircularProgress size={18} color="inherit" /> : <DeleteOutlineIcon />}
+          >
+            {deleteLoading ? 'Revirtiendo…' : 'Aceptar'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* ── Filtros ──────────────────────────────────────────────────────── */}
+      <Grid item xs={12}>
+        <Stack
+          direction={{ xs: 'column', sm: 'row' }}
+          spacing={1}
+          alignItems={{ sm: 'center' }}
+          sx={{ width: '100%' }}
+        >
+          <TextField
+            size="small"
+            placeholder="Indica una palabra para buscar…"
+            value={searchText}
+            onChange={(e) => setSearchText(e.target.value)}
+            sx={{ flex: 3, minWidth: 0, pb: 2 }}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon fontSize="small" color="action" />
+                </InputAdornment>
+              ),
+              endAdornment: searchText ? (
+                <InputAdornment position="end">
+                  <IconButton size="small" onClick={() => setSearchText('')} edge="end">
+                    <ClearIcon fontSize="small" />
+                  </IconButton>
+                </InputAdornment>
+              ) : null
+            }}
+          />
+          <Box sx={{ display: 'flex', gap: 1, flex: 2, minWidth: 0 }}>
+            <DateFilterInput label="Desde" value={filterDateFrom} onChange={setFilterDateFrom} />
+            <DateFilterInput label="Hasta" value={filterDateTo} onChange={setFilterDateTo} />
+          </Box>
+          {(searchText || filterDateFrom || filterDateTo) && (
+            <Button
+              size="small"
+              sx={{ flexShrink: 0, whiteSpace: 'nowrap' }}
+              onClick={() => { setSearchText(''); setFilterDateFrom(''); setFilterDateTo(''); }}
+            >
+              Limpiar
+            </Button>
+          )}
+        </Stack>
+      </Grid>
+
+      {/* ── Lista de compras ───────────────────────────────────────────────── */}
       {initialLoad && logsLoading ? (
         <Grid item xs={12}>
           <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
@@ -774,7 +1067,11 @@ const PurchasesPage = () => {
         </Grid>
       ) : filteredPurchases.length === 0 ? (
         <Grid item xs={12}>
-          <Alert severity="info">No hay compras registradas en el rango de fechas seleccionado.</Alert>
+          <Alert severity="info">
+            {allPurchasesData.length === 0
+              ? 'No hay compras registradas.'
+              : 'No se encontraron compras con los filtros aplicados.'}
+          </Alert>
         </Grid>
       ) : (
         <>
@@ -785,41 +1082,157 @@ const PurchasesPage = () => {
                   <Stack spacing={2}>
                     <Stack direction="row" justifyContent="space-between" alignItems="center">
                       <Typography variant="subtitle1" fontWeight={600}>
-                        Compra #{purchase._id.slice(-6)}
+                        {purchase.invoiceNumber ?? `Compra #${purchase._id.slice(-6)}`}
                       </Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        {formatDate(purchase.timestamp)}
-                      </Typography>
+                      <Stack direction="row" alignItems="center" spacing={1}>
+                        <Typography variant="caption" color="text.secondary">
+                          {formatDate(purchase.timestamp)}
+                        </Typography>
+                        {canUpdateStock && (
+                          <IconButton
+                            size="small"
+                            color="error"
+                            onClick={() => handleDeleteClick(purchase)}
+                            disabled={deleteLoading && deletingPurchaseId === purchase._id}
+                            aria-label="Eliminar compra"
+                            title="Revertir factura"
+                          >
+                            {deleteLoading && deletingPurchaseId === purchase._id
+                              ? <CircularProgress size={16} color="error" />
+                              : <DeleteOutlineIcon fontSize="small" />}
+                          </IconButton>
+                        )}
+                      </Stack>
                     </Stack>
                     {purchase.supplier && (
                       <Typography variant="body2" color="text.secondary">
-                        Proveedor: {purchase.supplier}
-                      </Typography>
-                    )}
-                    {purchase.invoiceNumber && (
-                      <Typography variant="body2" color="text.secondary">
-                        Factura: {purchase.invoiceNumber}
+                        Proveedor: {supplierNameBySku.get(purchase.supplier) ?? purchase.supplier}
                       </Typography>
                     )}
                     <Divider />
                     <Stack spacing={1}>
-                      <Typography variant="subtitle2" color="text.secondary">
-                        Items:
-                      </Typography>
-                      {purchase.items.map((item, index) => {
-                        const ingredientName =
-                          typeof item.ingredient === 'string'
-                            ? 'Ingrediente desconocido'
-                            : item.ingredient?.name || 'Ingrediente desconocido';
-                        return (
-                          <Box key={index}>
-                            <Typography variant="body2">
-                              • {ingredientName}: {item.quantityInGrams}g
-                              {item.unitPrice && ` - $${item.unitPrice.toFixed(2)}`}
-                            </Typography>
-                          </Box>
-                        );
+                      <Typography variant="subtitle2" color="text.secondary">Items:</Typography>
+                      {purchase.items.slice(0, ITEMS_VISIBLE).map((item, index) => {
+                        // Manejar ingredientes
+                        if (item.ingredient) {
+                          const ingredientName =
+                            typeof item.ingredient === 'string'
+                              ? 'Ingrediente desconocido'
+                              : item.ingredient?.name || 'Ingrediente desconocido';
+                          return (
+                            <Box key={index}>
+                              <Typography variant="body2">
+                                • {ingredientName}: {item.quantityInGrams}g
+                                {item.unitPrice && ` - $${item.unitPrice.toFixed(2)}`}
+                              </Typography>
+                            </Box>
+                          );
+                        }
+                        // Manejar bebidas
+                        if (item.beverage) {
+                          const beverageName =
+                            typeof item.beverage === 'string'
+                              ? 'Bebida desconocida'
+                              : item.beverage?.name || 'Bebida desconocida';
+                          return (
+                            <Box key={index}>
+                              <Typography variant="body2">
+                                • {beverageName}: {item.quantityInUnits}u
+                                {item.unitPrice && ` - $${item.unitPrice.toFixed(2)}`}
+                              </Typography>
+                            </Box>
+                          );
+                        }
+                        // Manejar items sin match
+                        if (item.unmatchedItem) {
+                          const u = item.unmatchedItem;
+                          const cantidad = u.cantidadTotalGramos > 0
+                            ? `${u.cantidadTotalGramos}g`
+                            : `${u.cantidadFactura} ${u.unidadFactura || 'uni'}`;
+                          return (
+                            <Box key={index}>
+                              <Typography variant="body2" sx={{ color: 'warning.main', fontStyle: 'italic' }}>
+                                ⚠ {u.descripcionArticulo || `Cód: ${u.codigoArticulo}`}: {cantidad}
+                                {item.unitPrice ? ` - $${item.unitPrice.toFixed(2)}` : ''}
+                              </Typography>
+                              <Typography variant="caption" color="text.disabled" sx={{ ml: 2, display: 'block' }}>
+                                Sin match · agregar manualmente
+                              </Typography>
+                            </Box>
+                          );
+                        }
+                        return null;
                       })}
+                      {purchase.items.length > ITEMS_VISIBLE && (
+                        <>
+                          <Collapse in={expandedItems.has(purchase._id)}>
+                            <Stack spacing={1}>
+                              {purchase.items.slice(ITEMS_VISIBLE).map((item, index) => {
+                                // Manejar ingredientes
+                                if (item.ingredient) {
+                                  const ingredientName =
+                                    typeof item.ingredient === 'string'
+                                      ? 'Ingrediente desconocido'
+                                      : item.ingredient?.name || 'Ingrediente desconocido';
+                                  return (
+                                    <Box key={index}>
+                                      <Typography variant="body2">
+                                        • {ingredientName}: {item.quantityInGrams}g
+                                        {item.unitPrice && ` - $${item.unitPrice.toFixed(2)}`}
+                                      </Typography>
+                                    </Box>
+                                  );
+                                }
+                                // Manejar bebidas
+                                if (item.beverage) {
+                                  const beverageName =
+                                    typeof item.beverage === 'string'
+                                      ? 'Bebida desconocida'
+                                      : item.beverage?.name || 'Bebida desconocida';
+                                  return (
+                                    <Box key={index}>
+                                      <Typography variant="body2">
+                                        • {beverageName}: {item.quantityInUnits}u
+                                        {item.unitPrice && ` - $${item.unitPrice.toFixed(2)}`}
+                                      </Typography>
+                                    </Box>
+                                  );
+                                }
+                                // Manejar items sin match
+                                if (item.unmatchedItem) {
+                                  const u = item.unmatchedItem;
+                                  const cantidad = u.cantidadTotalGramos > 0
+                                    ? `${u.cantidadTotalGramos}g`
+                                    : `${u.cantidadFactura} ${u.unidadFactura || 'uni'}`;
+                                  return (
+                                    <Box key={index}>
+                                      <Typography variant="body2" sx={{ color: 'warning.main', fontStyle: 'italic' }}>
+                                        ⚠ {u.descripcionArticulo || `Cód: ${u.codigoArticulo}`}: {cantidad}
+                                        {item.unitPrice ? ` - $${item.unitPrice.toFixed(2)}` : ''}
+                                      </Typography>
+                                      <Typography variant="caption" color="text.disabled" sx={{ ml: 2, display: 'block' }}>
+                                        Sin match · agregar manualmente
+                                      </Typography>
+                                    </Box>
+                                  );
+                                }
+                                return null;
+                              })}
+                            </Stack>
+                          </Collapse>
+                          <Button
+                            size="small"
+                            variant="text"
+                            onClick={() => toggleItemsExpanded(purchase._id)}
+                            endIcon={expandedItems.has(purchase._id) ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                            sx={{ alignSelf: 'flex-start', px: 0, color: 'text.secondary' }}
+                          >
+                            {expandedItems.has(purchase._id)
+                              ? 'Ver menos'
+                              : `Ver ${purchase.items.length - ITEMS_VISIBLE} más`}
+                          </Button>
+                        </>
+                      )}
                     </Stack>
                   </Stack>
                 </CardContent>
@@ -829,21 +1242,13 @@ const PurchasesPage = () => {
           {filteredPurchases.length > 0 && (
             <Grid item xs={12}>
               <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 2, mt: 2 }}>
-                <IconButton
-                  onClick={handlePreviousPage}
-                  disabled={currentPage === 1}
-                  aria-label="Página anterior"
-                >
+                <IconButton onClick={handlePreviousPage} disabled={currentPage === 1} aria-label="Página anterior">
                   <ChevronLeftIcon />
                 </IconButton>
                 <Typography variant="body2" color="text.secondary">
                   Página {currentPage} de {totalPages}
                 </Typography>
-                <IconButton
-                  onClick={handleNextPage}
-                  disabled={currentPage >= totalPages}
-                  aria-label="Página siguiente"
-                >
+                <IconButton onClick={handleNextPage} disabled={currentPage >= totalPages} aria-label="Página siguiente">
                   <ChevronRightIcon />
                 </IconButton>
               </Box>

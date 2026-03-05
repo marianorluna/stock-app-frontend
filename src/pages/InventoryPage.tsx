@@ -1,4 +1,4 @@
-import { Grid, Card, CardContent, CardActionArea, Typography, Stack } from '@mui/material';
+import { Grid, Card, CardContent, CardActionArea, Typography, Stack, Box } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import InventoryIcon from '@mui/icons-material/Inventory';
@@ -38,12 +38,16 @@ const InventoryPage = () => {
   return (
     <Grid container spacing={3} sx={{ py: 0 }}>
       <Grid item xs={12}>
-        <Typography variant="h4" gutterBottom>
-          Inventario
-        </Typography>
-        <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
-          Selecciona una categoría para gestionar tu inventario
-        </Typography>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+          <Box>
+            <Typography variant="h4" gutterBottom>
+              Inventario
+            </Typography>
+            <Typography variant="body1" color="text.secondary">
+              Selecciona una categoría para gestionar tu inventario
+            </Typography>
+          </Box>
+        </Box>
       </Grid>
       {inventoryCards.map((card) => (
         <Grid key={card.to} item xs={12} sm={6} md={4}>

@@ -127,6 +127,18 @@ const ManualEntryPage = () => {
     ingredient: PurchaseRecord['items'][number]['ingredient'] | WastageRecord['items'][number]['ingredient']
   ) => (typeof ingredient === 'string' ? ingredient : ingredient?.name ?? '');
 
+  const getWastageItemDisplay = (item: WastageRecord['items'][number]) => {
+    if (item.ingredient) {
+      const name = typeof item.ingredient === 'string' ? item.ingredient : item.ingredient?.name ?? '';
+      return `${name} • ${item.quantityInGrams ?? 0} g`;
+    }
+    if (item.beverage) {
+      const name = typeof item.beverage === 'string' ? item.beverage : (item.beverage as { _id: string; name: string })?.name ?? '';
+      return `${name} • ${item.quantityInUnits ?? 0} u`;
+    }
+    return '—';
+  };
+
   const getSupplierName = (sku: string | undefined) => {
     if (!sku) return 'Proveedor sin especificar';
     const supplier = suppliers.find((s) => s.sku === sku);
@@ -278,7 +290,7 @@ const ManualEntryPage = () => {
                     <Stack spacing={0.5} sx={{ mt: 1 }}>
                       {wastage.items.map((item, itemIndex) => (
                         <Typography key={`${wastage._id}-${itemIndex}`} variant="body2">
-                          {getIngredientName(item.ingredient)} • {item.quantityInGrams} g
+                          {getWastageItemDisplay(item)}
                           {item.reason ? ` • ${item.reason}` : ''}
                         </Typography>
                       ))}
@@ -403,7 +415,7 @@ const ManualEntryPage = () => {
               <Stack spacing={0.5}>
                 {wastageToDelete.items.map((item, itemIndex) => (
                   <Typography key={itemIndex} variant="body2">
-                    • {getIngredientName(item.ingredient)} • {item.quantityInGrams} g
+                    • {getWastageItemDisplay(item)}
                     {item.reason ? ` • ${item.reason}` : ''}
                   </Typography>
                 ))}

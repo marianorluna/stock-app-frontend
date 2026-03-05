@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Autocomplete,
+  Box,
   Button,
   Card,
   CardContent,
@@ -10,25 +11,84 @@ import {
   DialogContent,
   DialogTitle,
   Grid,
+  IconButton,
   InputAdornment,
+  MenuItem,
   Stack,
   TextField,
   Typography
 } from '@mui/material';
-import { useForm, useFieldArray, Controller } from 'react-hook-form';
+import { useForm, useFieldArray, Controller, useWatch } from 'react-hook-form';
 import { useInventoryStore } from '../hooks/useInventoryStore';
 import apiClient from '../services/apiClient';
-import { useAuth } from '../contexts/AuthContext';
 import { RequirePermission } from '../components/auth/RequirePermission';
 import SearchIcon from '@mui/icons-material/Search';
+import ClearIcon from '@mui/icons-material/Clear';
 import type { Dish } from '../types';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import TagIcon from '@mui/icons-material/Tag';
+
+// Mapeo categoryName → elemento SKU (según SKU_ELEMENTS.md, sección Recetas)
+const CATEGORY_ELEMENT_MAP: Record<string, string> = {
+  'Platos': 'PL',
+  'Carta': 'CT',
+  'Platos principales': 'PP',
+  'Combo': 'CB',
+  'Postres': 'PT',
+  'Entrantes': 'EN',
+  'Menu del dia': 'MD',
+  'Null': 'NL',
+  'Cafe': 'CA'
+};
+
+const RECIPE_CATEGORIES = Object.keys(CATEGORY_ELEMENT_MAP);
+
+// Genera un código de 3 letras a partir del nombre
+const nameToCode = (name: string): string => {
+  const cleaned = name.replace(/[^a-zA-Z]/g, '').toUpperCase();
+  return cleaned.substring(0, 3).padEnd(3, 'X');
+};
+
+// Genera un SKU único y correlativo para una receta
+const generateRecipeSku = (
+  categoryName: string,
+  name: string,
+  existingSkus: string[]
+): string => {
+  const element = CATEGORY_ELEMENT_MAP[categoryName];
+  if (!element || !name.trim()) return '';
+
+  const prefix = `R${element}`;
+
+  // Extraer números existentes para este elemento (formato: R[EL][4 dígitos][3 letras])
+  const existingNumbers = existingSkus
+    .filter((sku) => sku.startsWith(prefix) && sku.length === 10)
+    .map((sku) => parseInt(sku.substring(3, 7), 10))
+    .filter((n) => !isNaN(n));
+
+  const maxNumber = existingNumbers.length > 0 ? Math.max(...existingNumbers) : 0;
+  const nextNumber = maxNumber + 10;
+  const paddedNumber = String(nextNumber).padStart(4, '0');
+  const code = nameToCode(name);
+
+  const candidate = `${prefix}${paddedNumber}${code}`;
+
+  // Si el candidato ya existe, usar el reservado +1
+  if (existingSkus.includes(candidate)) {
+    const fallbackNumber = nextNumber + 1;
+    return `${prefix}${String(fallbackNumber).padStart(4, '0')}${code}`;
+  }
+
+  return candidate;
+};
 
 type RecipeFormValues = {
   name: string;
+  categoryName: string;
   description?: string;
+  productId: string;
   recipe: Array<{
     ingredient: string;
     quantityInGrams: number;
@@ -37,8 +97,52 @@ type RecipeFormValues = {
 
 const defaultValues: RecipeFormValues = {
   name: '',
+  categoryName: '',
   description: '',
+  productId: '',
   recipe: [{ ingredient: '', quantityInGrams: 0 }]
+};
+
+// Sub-componente para preview del SKU (se actualiza reactivamente)
+const SkuPreview = ({
+  control,
+  existingSkus,
+  editSku
+}: {
+  control: ReturnType<typeof useForm<RecipeFormValues>>['control'];
+  existingSkus: string[];
+  editSku?: string;
+}) => {
+  const name = useWatch({ control, name: 'name' });
+  const categoryName = useWatch({ control, name: 'categoryName' });
+
+  const sku = editSku ?? generateRecipeSku(categoryName, name, existingSkus);
+
+  if (!sku) return null;
+
+  return (
+    <Box
+      sx={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 1,
+        px: 2,
+        py: 1,
+        bgcolor: 'action.hover',
+        borderRadius: 1,
+        border: '1px solid',
+        borderColor: 'divider'
+      }}
+    >
+      <TagIcon fontSize="small" color="primary" />
+      <Typography variant="body2" color="text.secondary">
+        SKU generado:
+      </Typography>
+      <Typography variant="body2" fontWeight={700} fontFamily="monospace">
+        {sku}
+      </Typography>
+    </Box>
+  );
 };
 
 const RecipesPage = () => {
@@ -57,6 +161,7 @@ const RecipesPage = () => {
     control,
     handleSubmit,
     reset,
+    getValues,
     formState: { isSubmitting }
   } = useForm<RecipeFormValues>({ defaultValues });
 
@@ -73,6 +178,13 @@ const RecipesPage = () => {
     });
   }, [recipes, searchTerm]);
 
+  const existingSkus = useMemo(() =>
+    dishes
+      .map((d) => d.sku)
+      .filter((sku): sku is string => Boolean(sku)),
+    [dishes]
+  );
+
   useEffect(() => {
     void fetchIngredients();
     void fetchDishes();
@@ -80,10 +192,11 @@ const RecipesPage = () => {
 
   const ingredientOptions = useMemo(
     () =>
-      ingredients.map((ingredient) => ({
-        label: ingredient.name,
-        value: ingredient._id
-      })),
+      ingredients
+        .map((ingredient) => ({
+          label: ingredient.description ?? ingredient.name,
+          value: ingredient._id
+        })),
     [ingredients]
   );
 
@@ -91,13 +204,17 @@ const RecipesPage = () => {
     const recipe =
       dish.recipe && dish.recipe.length > 0
         ? dish.recipe.map((item) => ({
-            ingredient: typeof item.ingredient === 'string' ? item.ingredient : item.ingredient?._id ?? '',
-            quantityInGrams: item.quantityInGrams ?? 0
-          }))
+          ingredient: typeof item.ingredient === 'string' ? item.ingredient : item.ingredient?._id ?? '',
+          quantityInGrams: item.quantityInGrams ?? 0
+        }))
         : [{ ingredient: '', quantityInGrams: 0 }];
+    // Si productId es "S/PID" (valor por defecto), mostrar como vacío
+    const productId = dish.productId === 'S/PID' ? '' : (dish.productId ?? '');
     return {
       name: dish.name,
+      categoryName: '', // Las recetas existentes no tienen categoryName, se deriva del SKU
       description: dish.description ?? '',
+      productId,
       recipe
     };
   };
@@ -122,7 +239,8 @@ const RecipesPage = () => {
     const mapped = mapDishToFormValues(dish);
     reset({
       ...mapped,
-      name: `${mapped.name} (copia)`
+      name: `${mapped.name} (copia)`,
+      categoryName: '' // Resetear para generar nuevo SKU
     });
     setOpen(true);
   };
@@ -151,16 +269,33 @@ const RecipesPage = () => {
         quantityInGrams: item.quantityInGrams
       }));
 
-    const payload = {
+    // Si productId está vacío, usar "S/PID" como valor por defecto
+    const productId = values.productId.trim() || 'S/PID';
+
+    // Definir el tipo del payload correctamente
+    const payload: {
+      name: string;
+      description?: string;
+      productId: string;
+      recipe: Array<{
+        ingredient: string;
+        quantityInGrams: number;
+      }>;
+    } = {
       name: values.name,
-      description: values.description,
+      description: values.description?.trim() || undefined,
+      productId,
       recipe
     };
 
     if (dialogMode === 'edit' && selectedDish) {
+      // En edición: no cambiar el SKU
       await apiClient.put(`/dishes/${selectedDish._id}`, payload);
     } else {
-      await apiClient.post<Dish>('/dishes', payload);
+      // En creación / duplicación: generar SKU automáticamente
+      const sku = generateRecipeSku(values.categoryName, values.name, existingSkus);
+      if (!sku) return;
+      await apiClient.post<Dish>('/dishes', { ...payload, sku });
     }
     setOpen(false);
     setSelectedDish(null);
@@ -171,8 +306,10 @@ const RecipesPage = () => {
     dialogMode === 'edit'
       ? 'Editar receta'
       : dialogMode === 'duplicate'
-      ? 'Duplicar receta'
-      : 'Nueva receta';
+        ? 'Duplicar receta'
+        : 'Crear nueva receta';
+
+  const isEditMode = dialogMode === 'edit';
 
   return (
     <Grid container spacing={3} sx={{ py: 0 }}>
@@ -181,7 +318,7 @@ const RecipesPage = () => {
           <Typography variant="h4">Recetas</Typography>
           <RequirePermission resource="recipes" action="create" hide>
             <Button variant="contained" onClick={handleOpen}>
-              Nueva receta
+              Crear Nueva
             </Button>
           </RequirePermission>
         </Stack>
@@ -194,19 +331,48 @@ const RecipesPage = () => {
       )}
 
       <Grid item xs={12}>
-        <TextField
-          fullWidth
-          placeholder="Buscar recetas"
-          value={searchTerm}
-          onChange={(event) => setSearchTerm(event.target.value)}
-          InputProps={{
-            startAdornment: (
-              <InputAdornment position="start">
-                <SearchIcon fontSize="small" />
-              </InputAdornment>
-            )
-          }}
-        />
+        <Stack
+          direction={{ xs: 'column', sm: 'row' }}
+          spacing={1}
+          alignItems={{ sm: 'center' }}
+          sx={{ width: '100%' }}
+        >
+          <TextField
+            size="small"
+            placeholder="Buscar recetas"
+            value={searchTerm}
+            onChange={(event) => setSearchTerm(event.target.value)}
+            sx={{ flex: 1, minWidth: 0 }}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon fontSize="small" color="action" />
+                </InputAdornment>
+              ),
+              endAdornment: searchTerm ? (
+                <InputAdornment position="end">
+                  <IconButton size="small" onClick={() => setSearchTerm('')} edge="end">
+                    <ClearIcon fontSize="small" />
+                  </IconButton>
+                </InputAdornment>
+              ) : null
+            }}
+          />
+          {searchTerm && (
+            <Button
+              size="small"
+              sx={{ flexShrink: 0, whiteSpace: 'nowrap' }}
+              onClick={() => setSearchTerm('')}
+            >
+              Limpiar
+            </Button>
+          )}
+        </Stack>
+      </Grid>
+      <Grid item xs={12}>
+        <Typography variant="body2" color="text.secondary">
+          Mostrando {filteredRecipes.length} {filteredRecipes.length === 1 ? 'receta' : 'recetas'}
+        </Typography>
       </Grid>
 
       {filteredRecipes.map((dish) => (
@@ -214,22 +380,23 @@ const RecipesPage = () => {
           <Card variant="outlined">
             <CardContent>
               <Typography variant="h6">{dish.name}</Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                {dish.description}
+              <Typography variant="body2" color="text.secondary">
+                <Typography component="span" variant="body2" fontFamily="monospace">{dish.sku}</Typography>
+                {dish.description && ` · ${dish.description}`}
               </Typography>
-              <Stack spacing={0.5}>
-                {dish.recipe.map((item) => {
+              <Stack spacing={0.5} sx={{ mt: 1 }}>
+                {dish.recipe.map((item, index) => {
                   const ingredientRef = item.ingredient;
                   const ingredientId =
                     typeof ingredientRef === 'string' ? ingredientRef : ingredientRef?._id ?? '';
-                  const ingredientName =
-                    typeof ingredientRef === 'object' && ingredientRef !== null
-                      ? ingredientRef.name
-                      : ingredients.find((ingredient) => ingredient._id === ingredientId)?.name ?? ingredientId;
+                  const ingredient = typeof ingredientRef === 'object' && ingredientRef !== null
+                    ? ingredientRef
+                    : ingredients.find((ingredient) => ingredient._id === ingredientId);
+                  const ingredientDisplay = ingredient?.description ?? ingredient?.name ?? ingredientId;
 
                   return (
-                    <Typography key={`${dish._id}-${ingredientId}`} variant="body2">
-                      {ingredientName} • {item.quantityInGrams} g
+                    <Typography key={`${dish._id}-${ingredientId}-${index}`} variant="body2">
+                      {ingredientDisplay} • {item.quantityInGrams} g
                     </Typography>
                   );
                 })}
@@ -242,15 +409,6 @@ const RecipesPage = () => {
                     onClick={() => handleEdit(dish)}
                   >
                     Editar
-                  </Button>
-                </RequirePermission>
-                <RequirePermission resource="recipes" action="create" hide>
-                  <Button
-                    size="small"
-                    startIcon={<ContentCopyIcon fontSize="small" />}
-                    onClick={() => handleDuplicate(dish)}
-                  >
-                    Duplicar
                   </Button>
                 </RequirePermission>
                 <RequirePermission resource="recipes" action="delete" hide>
@@ -273,12 +431,61 @@ const RecipesPage = () => {
         <DialogTitle>{dialogTitle}</DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ mt: 1 }}>
+            {isEditMode ? (
+              // En edición: mostrar SKU como solo lectura
+              <TextField
+                label="SKU"
+                value={selectedDish?.sku ?? ''}
+                InputProps={{ readOnly: true }}
+                helperText="El SKU es inmutable"
+              />
+            ) : (
+              // En creación / duplicación: selector de categoría + preview SKU
+              <Stack spacing={2}>
+                <SkuPreview
+                  control={control}
+                  existingSkus={existingSkus}
+                />
+                <Controller
+                  control={control}
+                  name="categoryName"
+                  rules={{ required: true }}
+                  render={({ field }) => (
+                    <TextField
+                      select
+                      label="Categoría *"
+                      {...field}
+                      helperText="La categoría determina el elemento del SKU"
+                    >
+                      {RECIPE_CATEGORIES.map((cat) => (
+                        <MenuItem key={cat} value={cat}>
+                          {cat} <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 1 }}>({CATEGORY_ELEMENT_MAP[cat]})</Typography>
+                        </MenuItem>
+                      ))}
+                    </TextField>
+                  )}
+                />
+              </Stack>
+            )}
             <Controller
               control={control}
               name="name"
               rules={{ required: true }}
               render={({ field }) => <TextField label="Nombre" {...field} />}
             />
+            {!isEditMode && (
+              <Controller
+                control={control}
+                name="productId"
+                render={({ field }) => (
+                  <TextField
+                    label="ID Producto (Qmarero)"
+                    {...field}
+                    helperText="ID del producto en Qmarero. Si no se especifica, se usará 'S/PID'"
+                  />
+                )}
+              />
+            )}
             <Controller
               control={control}
               name="description"
@@ -293,13 +500,13 @@ const RecipesPage = () => {
                     name={`recipe.${index}.ingredient`}
                     rules={{ required: true }}
                     render={({ field: ingredientField }) => (
-                  <Autocomplete
+                      <Autocomplete
                         sx={{ minWidth: 220 }}
                         options={ingredientOptions}
                         getOptionLabel={(option) => option.label}
-                    value={ingredientOptions.find((option) => option.value === ingredientField.value) ?? null}
-                    onChange={(_, value) => ingredientField.onChange(value?.value ?? '')}
-                    isOptionEqualToValue={(option, value) => option.value === value.value}
+                        value={ingredientOptions.find((option) => option.value === ingredientField.value) ?? null}
+                        onChange={(_, value) => ingredientField.onChange(value?.value ?? '')}
+                        isOptionEqualToValue={(option, value) => option.value === value.value}
                         renderInput={(params) => <TextField {...params} label="Ingrediente" />}
                       />
                     )}
@@ -307,15 +514,37 @@ const RecipesPage = () => {
                   <Controller
                     control={control}
                     name={`recipe.${index}.quantityInGrams`}
-                    rules={{ required: true, min: 1 }}
-                render={({ field }) => (
-                  <TextField
-                    label="Cantidad (g)"
-                    type="number"
-                    value={field.value}
-                    onChange={(event) => field.onChange(Number(event.target.value))}
-                  />
-                )}
+                    rules={{
+                      required: true,
+                      min: 1,
+                      validate: (value) => {
+                        if (value !== 0 && value !== Math.floor(value)) {
+                          return 'La cantidad debe ser un número entero';
+                        }
+                        return true;
+                      }
+                    }}
+                    render={({ field: { onChange, value, ...field }, fieldState: { error } }) => (
+                      <TextField
+                        {...field}
+                        label="Cantidad (g)"
+                        type="number"
+                        inputProps={{ min: 1, step: 1 }}
+                        value={value === 0 ? '' : value ?? ''}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          if (val === '') {
+                            onChange(0);
+                          } else {
+                            // Redondear a entero
+                            const intValue = Math.floor(Number(val));
+                            onChange(intValue);
+                          }
+                        }}
+                        error={!!error}
+                        helperText={error?.message}
+                      />
+                    )}
                   />
                   <Button color="error" onClick={() => remove(index)}>
                     Eliminar
@@ -336,7 +565,19 @@ const RecipesPage = () => {
       <Dialog open={Boolean(confirmDelete)} onClose={() => setConfirmDelete(null)} maxWidth="xs" fullWidth>
         <DialogTitle>Confirmar eliminación</DialogTitle>
         <DialogContent>
-          <Typography>¿Estás seguro de que deseas eliminar la receta "{confirmDelete?.name}"?</Typography>
+          <Stack spacing={2}>
+            <Typography>
+              ¿Estás seguro de que deseas eliminar la receta "{confirmDelete?.name}"?
+            </Typography>
+            <Alert severity="warning">
+              <Typography variant="body2" fontWeight="bold" gutterBottom>
+                Advertencia: Esta acción es irreversible
+              </Typography>
+              <Typography variant="body2">
+                La eliminación de esta receta afectará los cálculos del inventario y las operaciones relacionadas.
+              </Typography>
+            </Alert>
+          </Stack>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setConfirmDelete(null)}>Cancelar</Button>
@@ -350,4 +591,3 @@ const RecipesPage = () => {
 };
 
 export default RecipesPage;
-

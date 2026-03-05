@@ -8,6 +8,7 @@ import type {
   ManualPurchasePayload,
   ManualWastagePayload,
   Ingredient,
+  Beverage,
   Dish,
   SaleRecord,
   PurchaseRecord,
@@ -21,6 +22,7 @@ import type {
 type InventoryState = {
   snapshot?: StockSnapshot;
   ingredients: Ingredient[];
+  beverages: Beverage[];
   dishes: Dish[];
   suppliers: Supplier[];
   loading: boolean;
@@ -32,8 +34,10 @@ type InventoryState = {
   purchasesLog: PurchaseRecord[];
   wastageLog: WastageRecord[];
   wastagePresets: WastagePreset[];
+  isUpdatingStock: boolean;
   fetchSnapshot: () => Promise<void>;
   fetchIngredients: () => Promise<void>;
+  fetchBeverages: () => Promise<void>;
   fetchDishes: () => Promise<void>;
   fetchSuppliers: () => Promise<void>;
   createSale: (payload: ManualSalePayload) => Promise<void>;
@@ -46,6 +50,7 @@ type InventoryState = {
   fetchWastagePresets: () => Promise<void>;
   createWastagePreset: (payload: WastagePresetPayload) => Promise<void>;
   deleteWastagePreset: (presetId: string) => Promise<void>;
+  setIsUpdatingStock: (status: boolean) => void;
 };
 
 let snapshotLongLoadTimer: number | undefined;
@@ -54,6 +59,7 @@ export const useInventoryStore = create<InventoryState>()(
   devtools((set, get) => ({
     snapshot: undefined,
     ingredients: [],
+    beverages: [],
     dishes: [],
     suppliers: [],
     loading: false,
@@ -65,6 +71,7 @@ export const useInventoryStore = create<InventoryState>()(
     purchasesLog: [],
     wastageLog: [],
     wastagePresets: [],
+    isUpdatingStock: false,
     //obtiene el snapshot actual del inventario desde el endpoint de inventario
     fetchSnapshot: async () => {
       if (snapshotLongLoadTimer) {
@@ -123,6 +130,15 @@ export const useInventoryStore = create<InventoryState>()(
         set({ error: 'Error cargando ingredientes' });
       }
     },
+    //obtiene la lista de bebidas desde la api
+    fetchBeverages: async () => {
+      try {
+        const { data } = await apiClient.get<Beverage[]>('/beverages');
+        set({ beverages: data });
+      } catch {
+        set({ error: 'Error cargando bebidas' });
+      }
+    },
     //obtiene la lista de platos/recetas desde la api
     fetchDishes: async () => {
       try {
@@ -174,15 +190,27 @@ export const useInventoryStore = create<InventoryState>()(
         void get().fetchSnapshot();
         void get().fetchManualLogs();
       };
+      const handleIngredientUpdate = () => {
+        void get().fetchSnapshot();
+        void get().fetchIngredients();
+      };
+      const handleBeverageUpdate = () => {
+        void get().fetchSnapshot();
+        void get().fetchBeverages();
+      };
 
       socket.on('inventory:sale', handleSale);
       socket.on('inventory:purchase', handlePurchase);
       socket.on('inventory:wastage', handleWastage);
+      socket.on('inventory:ingredient_updated', handleIngredientUpdate);
+      socket.on('inventory:beverage_updated', handleBeverageUpdate);
 
       return () => {
         socket.off('inventory:sale', handleSale);
         socket.off('inventory:purchase', handlePurchase);
         socket.off('inventory:wastage', handleWastage);
+        socket.off('inventory:ingredient_updated', handleIngredientUpdate);
+        socket.off('inventory:beverage_updated', handleBeverageUpdate);
       };
     },
     //obtiene los registros manuales de ventas, compras y mermas con filtros opcionales
@@ -256,7 +284,8 @@ export const useInventoryStore = create<InventoryState>()(
       set((state) => ({
         wastagePresets: state.wastagePresets.filter((preset) => preset._id !== presetId)
       }));
-    }
+    },
+    setIsUpdatingStock: (status) => set({ isUpdatingStock: status })
   }))
 );
 

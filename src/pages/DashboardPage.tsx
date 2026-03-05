@@ -37,15 +37,25 @@ const DashboardPage = () => {
       };
     }
 
-    const ingredientTotals = snapshot.categoryTotals?.ingredient ?? { total: 0, lowStock: 0 };
-    const beverageTotals = snapshot.categoryTotals?.beverage ?? { total: 0, lowStock: 0 };
-    const coffeeTotals = snapshot.categoryTotals?.coffee ?? { total: 0, lowStock: 0 };
+    const effectiveStock = (item: typeof snapshot.inventory[0]) =>
+      (item.factorMermaNat != null && item.factorMermaNat > 0 && item.stockMerma != null)
+        ? item.stockMerma
+        : item.stock;
+
+    const ingredientItems = snapshot.inventory?.filter(item => item.itemType === 'ingredient') ?? [];
+    const ingredientLowStock = ingredientItems.filter(item => effectiveStock(item) <= item.reorderPoint).length;
+
+    const beverageItems = snapshot.inventory?.filter(item => item.itemType === 'beverage') ?? [];
+    const beverageLowStock = beverageItems.filter(item => effectiveStock(item) <= item.reorderPoint).length;
 
     return {
-      ingredients: ingredientTotals,
+      ingredients: {
+        total: ingredientItems.length,
+        lowStock: ingredientLowStock
+      },
       beverages: {
-        total: beverageTotals.total + coffeeTotals.total,
-        lowStock: beverageTotals.lowStock + coffeeTotals.lowStock
+        total: beverageItems.length,
+        lowStock: beverageLowStock
       }
     };
   }, [snapshot]);
@@ -58,48 +68,31 @@ const DashboardPage = () => {
 
     const palette = {
       ingredient: theme.palette.primary.main,
-      beverage: theme.palette.info.light,
-      coffee: theme.palette.warning.light
+      beverage: theme.palette.info.light
     };
 
     const aggregated = snapshot.inventory.reduce<Record<string, number>>((acc, item) => {
-      acc[item.category] = (acc[item.category] ?? 0) + item.stock;
+      const key = item.itemType;
+      const eff = (item.factorMermaNat != null && item.factorMermaNat > 0 && item.stockMerma != null)
+        ? item.stockMerma
+        : item.stock;
+      acc[key] = (acc[key] ?? 0) + eff;
       return acc;
     }, {});
 
     const total = Object.values(aggregated).reduce((sum, value) => sum + value, 0);
 
-    // Mapear categorías nuevas a categorías antiguas para el gráfico
-    const categoryMapping: Record<string, string> = {
-      'bebida': 'beverage',
-      'cafe': 'coffee',
-      'condimentos': 'ingredient',
-      'frutas': 'ingredient',
-      'cereales': 'ingredient',
-      'lacteos': 'ingredient',
-      'otros': 'ingredient',
-      'proteinas': 'ingredient',
-      'vegetales': 'ingredient'
-    };
-
-    // Agregar categorías mapeadas
-    const mappedAggregated: Record<string, number> = {};
-    Object.entries(aggregated).forEach(([category, value]) => {
-      const mappedCategory = categoryMapping[category] || category;
-      mappedAggregated[mappedCategory] = (mappedAggregated[mappedCategory] ?? 0) + value;
-    });
-
-    const segments = (['ingredient', 'beverage', 'coffee'] as const)
-      .filter((category) => (mappedAggregated[category] ?? 0) > 0)
-      .map((category) => ({
-        key: category,
-        label: category === 'ingredient' ? 'Ingredientes' : category === 'coffee' ? 'Café' : 'Bebidas',
-        value: mappedAggregated[category] ?? 0,
-        color: palette[category]
+    const segments = (['ingredient', 'beverage'] as const)
+      .filter((key) => (aggregated[key] ?? 0) > 0)
+      .map((key) => ({
+        key,
+        label: key === 'ingredient' ? 'Ingredientes' : 'Bebidas',
+        value: aggregated[key] ?? 0,
+        color: palette[key]
       }));
 
     return { total, segments };
-  }, [snapshot, theme.palette.info.light, theme.palette.primary.main, theme.palette.warning.light]);
+  }, [snapshot, theme.palette.info.light, theme.palette.primary.main]);
 
   const stockHealth = useMemo(() => {
     if (!snapshot || !snapshot.inventory || snapshot.inventory.length === 0) {
@@ -113,11 +106,18 @@ const DashboardPage = () => {
     }
 
     const inventory = snapshot.inventory;
+
+    const getEff = (item: typeof inventory[0]) =>
+      (item.factorMermaNat != null && item.factorMermaNat > 0 && item.stockMerma != null)
+        ? item.stockMerma
+        : item.stock;
+
     const counters = inventory.reduce(
       (acc, item) => {
-        if (item.stock <= 0) {
+        const eff = getEff(item);
+        if (eff <= 0) {
           acc.critical += 1;
-        } else if (item.stock <= item.reorderPoint) {
+        } else if (eff <= item.reorderPoint) {
           acc.warning += 1;
         } else {
           acc.healthy += 1;
@@ -134,7 +134,7 @@ const DashboardPage = () => {
       critical: Math.round((counters.critical / total) * 100)
     };
 
-    const highlights = inventory.filter((item) => item.stock <= item.reorderPoint).slice(0, 5);
+    const highlights = inventory.filter((item) => getEff(item) <= item.reorderPoint).slice(0, 5);
 
     return { ...counters, ratios, highlights };
   }, [snapshot]);
@@ -196,7 +196,7 @@ const DashboardPage = () => {
             <Grid item xs={6}>
               <Box
                 component={Link}
-                to="/inventory/stock"
+                to="/inventory/stock?type=ingredient"
                 sx={{
                   textDecoration: 'none',
                   display: 'block'
@@ -254,7 +254,7 @@ const DashboardPage = () => {
                 >
                   <CardContent>
                     <Typography variant="subtitle2" color="text.secondary">
-                      Bebidas & Café
+                      Bebidas
                     </Typography>
                     <Typography variant="h4">{totals.beverages.total}</Typography>
                   </CardContent>
@@ -264,7 +264,7 @@ const DashboardPage = () => {
             <Grid item xs={6}>
               <Box
                 component={Link}
-                to="/inventory/stock"
+                to="/inventory/stock?type=beverage"
                 sx={{
                   textDecoration: 'none',
                   display: 'block'
@@ -347,7 +347,7 @@ const DashboardPage = () => {
                         {item.name}
                       </Typography>
                       <Typography variant="caption" color="text.secondary">
-                        Stock {item.stock} / Punto {item.reorderPoint} {item.unit}
+                        Stock Real {(item.factorMermaNat != null && item.factorMermaNat > 0 && item.stockMerma != null) ? item.stockMerma : item.stock} / Punto {item.reorderPoint} {item.unit}
                       </Typography>
                     </Stack>
                   ))}
@@ -467,7 +467,7 @@ const DashboardPage = () => {
                         {item.name}
                       </Typography>
                       <Typography variant="caption" color="text.secondary">
-                        Stock actual: {item.stock} {item.unit} • Punto de pedido: {item.reorderPoint} {item.unit}
+                        Stock Real: {(item.factorMermaNat != null && item.factorMermaNat > 0 && item.stockMerma != null) ? item.stockMerma : item.stock} {item.unit} • Punto de pedido: {item.reorderPoint} {item.unit}
                       </Typography>
                     </Stack>
                   ))}
@@ -514,7 +514,7 @@ const DashboardPage = () => {
                   <Stack direction="row" justifyContent="space-between" alignItems="center">
                     <Stack direction="row" spacing={1} alignItems="center">
                       <LocalDrinkIcon color="secondary" fontSize="small" />
-                      <Typography variant="subtitle2">Bebidas & Café</Typography>
+                      <Typography variant="subtitle2">Bebidas</Typography>
                     </Stack>
                     <Typography variant="caption" color="text.secondary">
                       {totals.beverages.total > 0
@@ -546,4 +546,3 @@ const DashboardPage = () => {
 };
 
 export default DashboardPage;
-

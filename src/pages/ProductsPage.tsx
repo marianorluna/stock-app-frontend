@@ -19,17 +19,17 @@ const ProductsPage = () => {
       permission: { resource: 'ingredients', action: 'read' }
     },
     {
+      title: 'Bebidas',
+      description: 'Administra las bebidas',
+      icon: <LocalCafeIcon sx={{ fontSize: 48, color: 'primary.main' }} />,
+      to: '/drinks',
+      permission: { resource: 'recipes', action: 'read' }
+    },
+    {
       title: 'Recetas',
       description: 'Visualiza y gestiona las recetas',
       icon: <ReceiptLongIcon sx={{ fontSize: 48, color: 'primary.main' }} />,
       to: '/recipes',
-      permission: { resource: 'recipes', action: 'read' }
-    },
-    {
-      title: 'Bebidas y Café',
-      description: 'Administra las bebidas y preparaciones de café',
-      icon: <LocalCafeIcon sx={{ fontSize: 48, color: 'primary.main' }} />,
-      to: '/drinks',
       permission: { resource: 'recipes', action: 'read' }
     }
   ];

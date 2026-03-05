@@ -4,7 +4,11 @@ export type InventoryItem = {
   stock: number;
   reorderPoint: number;
   unit: string;
-  category: 'ingredient' | 'beverage' | 'coffee';
+  categoryName: string;
+  itemType: 'ingredient' | 'beverage';
+  // Opcionales, solo presentes para ingredientes
+  stockMerma?: number;
+  factorMermaNat?: number;
 };
 
 export type StockSnapshot = {
@@ -12,7 +16,7 @@ export type StockSnapshot = {
   inventory: InventoryItem[];
   lowStock: InventoryItem[];
   categoryTotals: Record<
-    'ingredient' | 'beverage' | 'coffee',
+    'ingredient' | 'beverage',
     {
       total: number;
       lowStock: number;
@@ -23,19 +27,33 @@ export type StockSnapshot = {
 export type Ingredient = {
   _id: string;
   name: string;
+  description?: string;
   sku: string;
   stock: number;
-  stockUnit: 'u' | 'g' | 'ml';
-  purchaseUnit: string;
-  conversionFactor: number;
-  conversionUnit: 'u' | 'g' | 'ml';
+  stockUnit: 'g';
+  stockUnitName?: string;
   reorderPoint: number;
-  category: 'bebida' | 'cafe' | 'condimentos' | 'frutas' | 'cereales' | 'lacteos' | 'otros' | 'proteinas' | 'vegetales';
+  categoryName: string;
   allergens: string[];
   codeArticlePurchase: string;
-  // Campos de compatibilidad (virtuals del backend)
-  productUnit?: string;
-  conversionFactorToGrams?: number;
+  factorMermaNat?: number;
+  pesoUnitarioGramos?: number;
+  stockMerma?: number;
+};
+
+export type Beverage = {
+  _id: string;
+  name: string;
+  description?: string;
+  sku: string;
+  productId?: string;
+  stock: number;
+  stockUnit: 'u';
+  stockUnitName?: string;
+  reorderPoint: number;
+  categoryName: string;
+  allergens: string[];
+  codeArticlePurchase: string;
 };
 
 export type RecipeIngredient = {
@@ -47,6 +65,8 @@ export type Dish = {
   _id: string;
   name: string;
   description?: string;
+  sku?: string;
+  productId?: string;
   recipe: RecipeIngredient[];
   type?: 'dish' | 'drink' | 'dessert';
 };
@@ -62,16 +82,20 @@ export type ManualPurchasePayload = {
   supplier?: string;
   invoiceNumber?: string;
   items: Array<{
-    ingredient: string;
-    quantityInGrams: number;
+    ingredient?: string;
+    beverage?: string;
+    quantityInGrams?: number;
+    quantityInUnits?: number;
     unitPrice: number;
   }>;
 };
 
 export type ManualWastagePayload = {
   items: Array<{
-    ingredient: string;
-    quantityInGrams: number;
+    ingredient?: string;
+    beverage?: string;
+    quantityInGrams?: number;
+    quantityInUnits?: number;
     reason?: string;
   }>;
 };
@@ -115,7 +139,7 @@ export type ManualLogFilters = {
 };
 
 type DishReference = string | { _id: string; name: string; type?: string };
-type IngredientReference = string | { _id: string; name: string; purchaseUnit?: string; productUnit?: string };
+type IngredientReference = string | { _id: string; name: string };
 
 export type SaleRecord = {
   _id: string;
@@ -128,14 +152,26 @@ export type SaleRecord = {
   metadata?: Record<string, unknown>;
 };
 
+type BeverageReference = string | { _id: string; name: string };
+
 export type PurchaseRecord = {
   _id: string;
   timestamp: string;
   supplier?: string;
   invoiceNumber?: string;
   items: Array<{
-    ingredient: IngredientReference;
-    quantityInGrams: number;
+    ingredient?: IngredientReference;
+    beverage?: BeverageReference;
+    quantityInGrams?: number;
+    quantityInUnits?: number;
+    unmatchedItem?: {
+      codigoArticulo: string;
+      descripcionArticulo?: string | null;
+      cantidadFactura: number;
+      cantidadTotalGramos: number;
+      unidadFactura?: string | null;
+      razon: string;
+    };
     unitPrice: number;
   }>;
   metadata?: Record<string, unknown>;
@@ -145,10 +181,11 @@ export type WastageRecord = {
   _id: string;
   timestamp: string;
   items: Array<{
-    ingredient: IngredientReference;
-    quantityInGrams: number;
+    ingredient?: IngredientReference;
+    beverage?: BeverageReference;
+    quantityInGrams?: number;
+    quantityInUnits?: number;
     reason?: string;
   }>;
   metadata?: Record<string, unknown>;
 };
-
