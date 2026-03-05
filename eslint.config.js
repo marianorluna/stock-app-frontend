@@ -1,7 +1,5 @@
 import js from '@eslint/js';
 import tseslint from 'typescript-eslint';
-import pluginImport from 'eslint-plugin-import';
-import pluginPromise from 'eslint-plugin-promise';
 import pluginN from 'eslint-plugin-n';
 import { fileURLToPath } from 'node:url';
 import { dirname } from 'node:path';
@@ -20,8 +18,6 @@ export default tseslint.config(
       }
     },
     plugins: {
-      import: pluginImport,
-      promise: pluginPromise,
       n: pluginN
     },
     rules: {
