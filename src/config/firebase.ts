@@ -1,7 +1,6 @@
 import { initializeApp, getApps, FirebaseApp } from 'firebase/app';
 import { getAuth, Auth } from 'firebase/auth';
 
-<<<<<<< HEAD
 // Configuración del SDK web de Firebase.
 // Estas variables NO son secretos de servidor: son públicas por diseño y el
 // navegador siempre puede verlas. La seguridad depende de:
@@ -19,16 +18,6 @@ const firebaseConfig = {
   storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
   messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
   appId: import.meta.env.VITE_FIREBASE_APP_ID,
-=======
-// Configuración de Firebase desde variables de entorno (en producción definir VITE_FIREBASE_* en Vercel)
-const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || 'AIzaSyBL-eefBi23wFPcwMzfLjTuOtljHJmhjhU',
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || 'stockearly-app.firebaseapp.com',
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || 'stockearly-app',
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || 'stockearly-app.firebasestorage.app',
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '586677957810',
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || '1:586677957810:web:c331befe10c240c43a05ab'
->>>>>>> 7ac7de05f05cfeb22bb350a23a296a5e0b01f1e7
 };
 
 let app: FirebaseApp;
