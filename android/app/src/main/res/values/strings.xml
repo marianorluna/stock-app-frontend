@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">StockEarly</string>
+    <string name="title_activity_main">StockEarly</string>
+    <string name="package_name">com.arqfi.stockearly</string>
+    <string name="custom_url_scheme">com.arqfi.stockearly</string>
+</resources>
