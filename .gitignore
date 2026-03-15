@@ -5,3 +5,5 @@ node_modules
 .vscode
 env.example
 dist/
+test.env
+firebase.config.js

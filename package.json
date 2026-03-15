@@ -12,6 +12,9 @@
     "lint": "eslint \"src/**/*.{ts,tsx}\""
   },
   "dependencies": {
+    "@capacitor/android": "^8.1.0",
+    "@capacitor/cli": "^8.1.0",
+    "@capacitor/core": "^8.1.0",
     "@emotion/react": "^11.13.3",
     "@emotion/styled": "^11.13.0",
     "@mui/icons-material": "^5.16.7",
