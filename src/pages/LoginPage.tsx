@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
+  Accordion,
+  AccordionDetails,
+  AccordionSummary,
   Box,
   Container,
   Paper,
@@ -8,11 +11,14 @@ import {
   Button,
   Typography,
   Alert,
-  Link,
   Tab,
   Tabs
 } from '@mui/material';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { useAuth } from '../contexts/AuthContext';
+
+const DEMO_GUEST_EMAIL = 'guest@test.demo';
+const DEMO_GUEST_PASSWORD = 'Demo123+';
 
 const LoginPage = () => {
   const [email, setEmail] = useState('');
@@ -140,6 +146,71 @@ const LoginPage = () => {
             </Button>
           </Box>
         </Paper>
+
+        <Accordion
+          disableGutters
+          elevation={0}
+          sx={{
+            mt: 3,
+            width: '100%',
+            borderRadius: `${10}px !important`,
+            border: '1px solid',
+            borderColor: 'divider',
+            bgcolor: 'background.paper',
+            boxShadow: 1,
+            '&:before': { display: 'none' }
+          }}
+        >
+          <AccordionSummary
+            expandIcon={<ExpandMoreIcon sx={{ color: 'primary.main' }} />}
+            sx={{
+              px: 2,
+              py: 1,
+              '& .MuiAccordionSummary-content': { my: 1, alignItems: 'center', gap: 1 }
+            }}
+          >
+            <Typography component="span" sx={{ mr: 0.5 }}>
+              🚨
+            </Typography>
+            <Typography component="span" variant="subtitle1" fontWeight={600}>
+              Cuenta de demostración
+            </Typography>
+          </AccordionSummary>
+          <AccordionDetails sx={{ px: 2, pb: 2, pt: 0 }}>
+            <Typography variant="body2" color="text.secondary" paragraph>
+              Puedes entrar con el usuario guest para explorar la aplicación de forma rápida.
+            </Typography>
+            <Paper
+              variant="outlined"
+              sx={{
+                p: 2,
+                mb: 2,
+                borderRadius: 2,
+                bgcolor: 'grey.50',
+                fontFamily: 'ui-monospace, Menlo, Consolas, monospace',
+                fontSize: '0.85rem'
+              }}
+            >
+              <Typography variant="body2" component="div">
+                <strong>Correo:</strong> {DEMO_GUEST_EMAIL}
+              </Typography>
+              <Typography variant="body2" component="div" sx={{ mt: 0.5 }}>
+                <strong>Contraseña:</strong> {DEMO_GUEST_PASSWORD}
+              </Typography>
+            </Paper>
+            <Typography variant="body2" color="text.secondary">
+              Esta cuenta tiene{' '}
+              <Typography component="span" variant="body2" fontWeight={600} color="text.primary">
+                accesos limitados
+              </Typography>{' '}
+              según el rol guest. Si necesitas probar todas las funcionalidades con permisos completos,{' '}
+              <Typography component="span" variant="body2" fontWeight={600} color="primary.main">
+                comunícate con el administrador
+              </Typography>{' '}
+              para que te asigne un usuario administrador.
+            </Typography>
+          </AccordionDetails>
+        </Accordion>
       </Box>
     </Container>
   );
